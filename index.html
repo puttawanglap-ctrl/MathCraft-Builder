@@ -1,1283 +1,1141 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Play, Timer, Trophy, RotateCcw, PaintBucket, Zap, 
-  Star, LayoutGrid, Info, Flame, Shield, HelpCircle, 
-  Box, Sparkles, Crosshair, PauseCircle, Map, Crown, ArrowRight,
-  Settings, Home, ClipboardList, Gamepad2, ImageIcon, ShoppingCart,
-  User, Gem, Coins, ChevronLeft, Share2, Swords, Search, Volume2, Music
-} from 'lucide-react';
-
-const ROWS = 12;
-const COLS = 16;
-
-// Target challenges for Time Attack and Mystery Modes
-const GAME_TARGETS = [
-  { area: 4, perimeter: 8, name: "กล่องสี่เหลี่ยมจิ๋ว" },
-  { area: 5, perimeter: 12, name: "ไม้กางเขนโบราณ" },
-  { area: 6, perimeter: 10, name: "ผืนผ้าขนาดกลาง" },
-  { area: 8, perimeter: 12, name: "บันไดก้าวแรก" },
-  { area: 12, perimeter: 16, name: "หัวใจพิกเซล" },
-  { area: 16, perimeter: 20, name: "สัญลักษณ์สมมาตร" },
-  { area: 24, perimeter: 28, name: "ฐานบินอวกาศ" },
-  { area: 32, perimeter: 44, name: "ยาน Space Invader" }
-];
-
-// Blueprints for Story Adventure / Level progression
-const ADVENTURE_LEVELS = [
-  {
-    id: 1,
-    name: "ช่วยชาวเมืองสร้างสะพาน",
-    description: "สร้างรูปทรงสะพานง่ายๆ เพื่อเชื่อมทางระหว่างเกาะลอยฟ้า",
-    targetArea: 16,
-    targetPerimeter: 20,
-    timeLimit: 45,
-    rewardXp: 200,
-    blueprint: [
-      [0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,0,0,0],
-      [1,1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1,1],
-      [1,0,0,0,0,0,0,1],
-      [1,0,0,0,0,0,0,1]
-    ]
-  },
-  {
-    id: 2,
-    name: "สร้างฐานดาวอังคาร",
-    description: "ควบคุมความกดอากาศด้วยรูปทรงพิเศษที่จำกัดเส้นรอบรูปอย่างรัดกุม",
-    targetArea: 40,
-    targetPerimeter: 28, // Perimeter < 30
-    timeLimit: 90,
-    rewardXp: 500,
-    blueprint: [
-      [0,1,1,1,1,1,1,0],
-      [1,1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1,1],
-      [1,1,1,1,1,1,1,1],
-      [0,1,1,1,1,1,1,0]
-    ]
-  }
-];
-
-export default function App() {
-  const [currentScreen, setCurrentScreen] = useState('hub'); // 'hub' | 'game'
-  const [activeGameMode, setActiveGameMode] = useState('creative'); // 'creative' | 'time_attack' | 'mystery' | 'battle' | 'blueprint'
-  const [skin, setSkin] = useState('neon'); // 'classic' | 'neon' | 'pixel' | 'minecraft' | 'space' | 'dino'
-  const [isMusicOn, setIsMusicOn] = useState(true);
-  const [isSoundOn, setIsSoundOn] = useState(true);
-
-  // Player state mimicking image_43ecf4.jpg
-  const [playerStats, setPlayerStats] = useState({
-    level: 15,
-    xp: 75, // 0 to 100 percentage
-    coins: 2450,
-    gems: 320,
-    crowns: 8750
-  });
-
-  const enterGame = (mode) => {
-    setActiveGameMode(mode);
-    setCurrentScreen('game');
-  };
-
-  const backToHub = () => {
-    setCurrentScreen('hub');
-  };
-
-  return (
-    <div className="min-h-screen bg-[#070b19] text-white font-sans overflow-x-hidden selection:bg-cyan-500/30 flex flex-col relative">
-      {/* Background Grid Pattern */}
-      <div className="absolute inset-0 pointer-events-none z-0 opacity-10 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px]"></div>
-      
-      {currentScreen === 'hub' ? (
-        <HubView 
-          enterGame={enterGame} 
-          playerStats={playerStats} 
-          setSkin={setSkin} 
-          currentSkin={skin}
-          isMusicOn={isMusicOn}
-          setIsMusicOn={setIsMusicOn}
-          isSoundOn={isSoundOn}
-          setIsSoundOn={setIsSoundOn}
-        />
-      ) : (
-        <GameEngine 
-          mode={activeGameMode} 
-          skin={skin} 
-          setSkin={setSkin}
-          goBack={backToHub} 
-          playerStats={playerStats}
-          setPlayerStats={setPlayerStats}
-        />
-      )}
-    </div>
-  );
-}
-
-function HubView({ enterGame, playerStats, setSkin, currentSkin, isMusicOn, setIsMusicOn, isSoundOn, setIsSoundOn }) {
-  // Simulate continuous scrolling live battle scores to mimic life classroom activity
-  const [battleList, setBattleList] = useState([
-    { name: "น้องฟ้า", score: 36, isCrown: true },
-    { name: "น้องนัท", score: 34, isCrown: false },
-    { name: "น้องบอส", score: 32, isCrown: false },
-    { name: "น้องกาย", score: 30, isCrown: false }
-  ]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setBattleList(prev => {
-        const updated = [...prev];
-        // Randomly bump up someone's score for realism!
-        const randomIndex = Math.floor(Math.random() * updated.length);
-        if (updated[randomIndex].score < 50) {
-          updated[randomIndex].score += 2;
-        } else {
-          updated[randomIndex].score = 30; // reset
-        }
-        // Sort
-        updated.sort((a,b) => b.score - a.score);
-        // Award crown to rank 1
-        return updated.map((item, idx) => ({
-          ...item,
-          isCrown: idx === 0
-        }));
-      });
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="relative z-10 flex flex-col min-h-screen">
-      
-      {/* --- Top Bar (Matching image_43ecf4.jpg style) --- */}
-      <header className="bg-slate-900/90 backdrop-blur-md border-b border-slate-700/60 p-3 shrink-0 flex items-center justify-between gap-2 shadow-[0_4px_20px_rgba(0,0,0,0.6)]">
-        {/* Profile Avatar & Level Info */}
-        <div className="flex items-center gap-2 sm:gap-3 bg-slate-950/80 rounded-full py-1.5 px-3 border border-slate-700 shadow-inner">
-          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-tr from-amber-400 to-orange-500 rounded-full flex items-center justify-center border-2 border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.3)] overflow-hidden">
-             <User className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs sm:text-sm font-black text-amber-300">Lv. {playerStats.level}</span>
-            </div>
-            {/* XP Bar */}
-            <div className="w-20 sm:w-28 h-2 bg-slate-800 rounded-full overflow-hidden mt-0.5 border border-slate-700">
-              <div className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full" style={{ width: `${playerStats.xp}%` }}></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Center Title */}
-        <div className="hidden lg:flex flex-col items-center select-none">
-          <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 via-yellow-100 to-yellow-300 drop-shadow-[0_3px_5px_rgba(0,0,0,0.9)] tracking-wider">
-            สร้างภาพสุดว้าว!
-          </h1>
-          <span className="text-[11px] text-cyan-400 font-bold uppercase tracking-widest bg-cyan-950/40 px-3 py-0.5 rounded-full border border-cyan-800/50 mt-1">
-            คิดเร็ว สร้างสวย เก่งคณิตศาสตร์
-          </span>
-        </div>
-
-        {/* Currency Widgets */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
-          {/* Gold Coins */}
-          <div className="flex items-center bg-slate-950/95 rounded-full pl-1.5 pr-2.5 py-1 border border-yellow-500/40 gap-1 sm:gap-1.5 shadow-[0_0_10px_rgba(234,179,8,0.1)]">
-            <div className="w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center border border-yellow-300 shadow-[0_0_4px_rgba(250,204,21,0.5)]">
-              <Coins className="w-3.5 h-3.5 text-slate-950" />
-            </div>
-            <span className="text-xs sm:text-sm font-black text-yellow-400">{playerStats.coins.toLocaleString()}</span>
-          </div>
-
-          {/* Cyan Gems */}
-          <div className="flex items-center bg-slate-950/95 rounded-full pl-1.5 pr-2.5 py-1 border border-cyan-500/40 gap-1 sm:gap-1.5 shadow-[0_0_10px_rgba(6,182,212,0.1)]">
-            <div className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center border border-cyan-300 shadow-[0_0_4px_rgba(6,182,212,0.5)]">
-              <Gem className="w-3.5 h-3.5 text-slate-950" />
-            </div>
-            <span className="text-xs sm:text-sm font-black text-cyan-400">{playerStats.gems.toLocaleString()}</span>
-          </div>
-
-          {/* Yellow Crowns */}
-          <div className="flex items-center bg-slate-950/95 rounded-full pl-1.5 pr-2.5 py-1 border border-pink-500/40 gap-1 sm:gap-1.5 shadow-[0_0_10px_rgba(244,114,182,0.1)]">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center border border-pink-300 shadow-[0_0_4px_rgba(244,114,182,0.5)]">
-              <Crown className="w-3 h-3 text-white fill-current" />
-            </div>
-            <span className="text-xs sm:text-sm font-black text-pink-400">{playerStats.crowns.toLocaleString()}</span>
-          </div>
-
-          <button className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full transition-transform active:scale-95 shadow-lg">
-            <Settings className="w-4 h-4 text-slate-300" />
-          </button>
-        </div>
-      </header>
-
-      {/* --- Main Dashboard Hub Container --- */}
-      <main className="flex-1 overflow-y-auto p-3 sm:p-5 pb-24 max-w-[1400px] w-full mx-auto">
-        
-        {/* Mobile Header Banner (Alternative for smaller viewports) */}
-        <div className="lg:hidden text-center mb-4 bg-gradient-to-b from-slate-900 to-slate-950 p-3 rounded-2xl border border-slate-800 shadow-md">
-          <h2 className="text-xl sm:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 via-yellow-100 to-yellow-300 drop-shadow-sm">
-            สร้างภาพสุดว้าว!
-          </h2>
-          <p className="text-[10px] sm:text-xs text-cyan-400 font-bold mt-1 uppercase tracking-wider">คิดเร็ว สร้างสวย เก่งคณิตศาสตร์</p>
-        </div>
-
-        {/* Dashboard Grid System matching image layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
-          
-          {/* 1. CREATIVE BUILD (Green Box, Col span 5) */}
-          <div 
-            onClick={() => enterGame('creative')}
-            className="lg:col-span-5 bg-slate-900/90 rounded-3xl border-2 border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.25)] p-4 cursor-pointer transform transition-all duration-300 hover:scale-[1.01] hover:border-emerald-400 group relative overflow-hidden flex flex-col justify-between min-h-[290px]"
-          >
-            {/* Header Badge */}
-            <div className="absolute top-0 left-0 bg-emerald-500 text-slate-950 font-black px-4 py-1 rounded-br-2xl text-xs sm:text-sm tracking-wider flex items-center gap-1.5 shadow-[0_2px_10px_rgba(16,185,129,0.3)]">
-              <PaintBucket className="w-4 h-4 fill-slate-950" /> CREATIVE BUILD
-            </div>
-
-            <div className="grid grid-cols-12 gap-3 mt-6 items-center flex-1">
-              {/* Left Side: Mock Toolbar */}
-              <div className="col-span-3 flex flex-col gap-1.5">
-                {[
-                  { text: 'ใหม่', icon: '+' },
-                  { text: 'บันทึก', icon: '💾' },
-                  { text: 'ล้าง', icon: '🗑️' },
-                  { text: 'สกิน', icon: '🎨' }
-                ].map((btn, i) => (
-                  <div key={i} className="bg-slate-950/80 rounded-xl py-1 px-1.5 border border-slate-800 flex flex-col items-center justify-center opacity-80 group-hover:opacity-100 group-hover:border-slate-700 transition-all aspect-square shadow-sm">
-                    <span className="text-sm sm:text-base">{btn.icon}</span>
-                    <span className="text-[9px] font-black mt-0.5 text-slate-400">{btn.text}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Middle: Robot Miniature Grid (Exactly like the drawing in image_43ecf4.jpg) */}
-              <div className="col-span-5 bg-white/95 rounded-2xl p-1.5 border-2 border-slate-300 aspect-square flex items-center justify-center shadow-lg relative">
-                <div className="grid grid-cols-8 grid-rows-8 gap-[1px] w-full h-full bg-slate-200">
-                  {/* Space Robot representation in miniature */}
-                  {Array(64).fill(0).map((_, i) => {
-                    const r = Math.floor(i / 8);
-                    const c = i % 8;
-                    let blockColor = "bg-white";
-                    
-                    // Robot body mapping matching pixel colors
-                    if (r === 1 && c === 4) blockColor = "bg-slate-700 border-b-2 border-slate-900"; // Antenna
-                    if (r === 2 && (c >= 3 && c <= 5)) blockColor = "bg-blue-500"; // Head
-                    if (r === 2 && c === 4) blockColor = "bg-yellow-400"; // Visor
-                    if (r === 3 && (c === 2 || c === 6)) blockColor = "bg-yellow-400"; // Shoulder pads
-                    if (r === 3 && (c >= 3 && c <= 5)) blockColor = "bg-blue-500"; // Body top
-                    if (r === 4 && (c >= 1 && c <= 7)) blockColor = "bg-blue-500"; // Arms
-                    if (r === 4 && c === 4) blockColor = "bg-red-500"; // Core
-                    if (r === 5 && (c === 1 || c === 7)) blockColor = "bg-slate-800"; // Claws
-                    if (r === 5 && (c >= 3 && c <= 5)) blockColor = "bg-blue-500"; // Body lower
-                    if (r === 6 && (c === 3 || c === 5)) blockColor = "bg-yellow-400"; // Legs
-                    
-                    return <div key={i} className={`w-full h-full rounded-[1px] ${blockColor}`} />;
-                  })}
-                </div>
-              </div>
-
-              {/* Right Side: Mock Stats */}
-              <div className="col-span-4 flex flex-col gap-1.5 pl-1">
-                <div>
-                  <div className="text-[11px] font-bold text-slate-400 leading-tight">Space Robot</div>
-                  <div className="bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800 flex justify-between text-[11px] mt-1">
-                    <span className="text-slate-400">Area</span>
-                    <span className="text-emerald-400 font-bold">32</span>
-                  </div>
-                  <div className="bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800 flex justify-between text-[11px] mt-1">
-                    <span className="text-slate-400">Perim</span>
-                    <span className="text-cyan-400 font-bold">44</span>
-                  </div>
-                </div>
-
-                <div className="text-[9px] text-slate-500 space-y-0.5">
-                  <div className="flex justify-between">
-                    <span>Symmetry</span> <span className="text-yellow-400">★★★★☆</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Complexity</span> <span className="text-yellow-400">★★★★★</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-800/80 pt-1 mt-1 text-center">
-                  <span className="text-[9px] text-slate-500 block leading-none">คะแนน</span>
-                  <span className="text-xs font-black text-amber-400 flex items-center justify-center gap-0.5">
-                    <Trophy className="w-3 h-3" /> 1250
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <button className="w-full mt-3 py-1.5 bg-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-md group-hover:bg-emerald-400 transition-colors uppercase tracking-wider">
-              แชร์ผลงานของคุณ
-            </button>
-          </div>
-
-          {/* 2. TIME ATTACK (Red Box, Col span 7) */}
-          <div 
-            onClick={() => enterGame('time_attack')}
-            className="lg:col-span-7 bg-slate-900/90 rounded-3xl border-2 border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.25)] p-4 cursor-pointer transform transition-all duration-300 hover:scale-[1.01] hover:border-rose-400 group relative overflow-hidden flex flex-col justify-between min-h-[290px]"
-          >
-            {/* Header Badge */}
-            <div className="absolute top-0 left-0 bg-rose-500 text-white font-black px-4 py-1 rounded-br-2xl text-xs sm:text-sm tracking-wider flex items-center gap-1.5 shadow-[0_2px_10px_rgba(244,63,94,0.3)]">
-              <Timer className="w-4 h-4" /> TIME ATTACK
-            </div>
-
-            {/* Top Right Live Combos */}
-            <div className="absolute top-2 right-2 flex items-center gap-2">
-              <div className="bg-orange-500/10 text-orange-400 border border-orange-500/40 px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 fill-current text-orange-500 animate-pulse" /> COMBO! <span className="text-yellow-300">5 ข้อติด</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-12 gap-4 mt-6 items-center flex-1">
-              
-              {/* Left Side: Challenge numbers & target Info */}
-              <div className="col-span-5 bg-slate-950/80 rounded-2xl p-4 border border-slate-800 text-center flex flex-col justify-center h-full">
-                <span className="text-xs text-slate-400 font-bold">สร้างรูปที่มีพื้นที่</span>
-                <span className="text-5xl font-black text-yellow-400 my-1 drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">24</span>
-                <span className="text-[11px] text-rose-400 font-black animate-pulse bg-rose-500/10 py-1 rounded-lg border border-rose-500/20">ภายใน 00:30</span>
-              </div>
-
-              {/* Middle: Grid mockup resembling target shape */}
-              <div className="col-span-4 bg-white rounded-2xl p-1 border-2 border-slate-300 aspect-square flex items-center justify-center shadow-lg">
-                <div className="grid grid-cols-6 grid-rows-6 gap-[1px] w-full h-full bg-slate-200">
-                  {Array(36).fill(0).map((_, i) => {
-                    const r = Math.floor(i / 6);
-                    const c = i % 6;
-                    let isBlock = false;
-                    // Let's draw a nice symmetrical hammer/t-shape
-                    if (r === 1 && (c >= 1 && c <= 4)) isBlock = true;
-                    if (r === 2 && (c >= 1 && c <= 4)) isBlock = true;
-                    if (r === 3 && (c === 2 || c === 3)) isBlock = true;
-                    if (r === 4 && (c === 2 || c === 3)) isBlock = true;
-
-                    return (
-                      <div 
-                        key={i} 
-                        className={`w-full h-full rounded-[1px] ${isBlock ? 'bg-emerald-500 border border-emerald-400 shadow-sm' : 'bg-white'}`} 
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Right: Scoring details */}
-              <div className="col-span-3 flex flex-col justify-center gap-2 text-center bg-slate-950/50 p-3 rounded-xl border border-slate-800">
-                <div className="text-[10px] text-slate-400 font-bold">รางวัลรอบนี้</div>
-                <div className="text-amber-400 font-black text-sm flex items-center justify-center gap-1">
-                  <Star className="w-4 h-4 fill-current" /> +100 XP
-                </div>
-                <div className="border-t border-slate-800 pt-1">
-                  <span className="text-[9px] text-slate-400 block leading-tight">คะแนนสะสม</span>
-                  <span className="text-lg font-black text-cyan-400">750</span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Block Previews at bottom */}
-            <div className="flex gap-1.5 mt-3 justify-center items-center opacity-85">
-              {['bg-purple-500/80', 'bg-yellow-500/80', 'bg-emerald-500/80', 'bg-blue-500/80', 'bg-orange-500/80', 'bg-rose-500/80'].map((color, i) => (
-                <div key={i} className={`w-6 h-4 sm:w-8 sm:h-5 rounded-sm border border-white/20 ${color}`} />
-              ))}
-            </div>
-          </div>
-
-          {/* 3. MYSTERY SHAPE (Purple Box, Col span 4) */}
-          <div 
-            onClick={() => enterGame('mystery')}
-            className="lg:col-span-4 bg-slate-900/90 rounded-3xl border-2 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.25)] p-4 cursor-pointer transform transition-all duration-300 hover:scale-[1.01] hover:border-fuchsia-400 group relative overflow-hidden flex flex-col justify-between min-h-[220px]"
-          >
-            {/* Header Badge */}
-            <div className="absolute top-0 left-0 bg-fuchsia-500 text-white font-black px-4 py-1 rounded-br-2xl text-xs sm:text-sm tracking-wider flex items-center gap-1.5 shadow-[0_2px_10px_rgba(217,70,239,0.3)]">
-              <HelpCircle className="w-4 h-4" /> MYSTERY SHAPE
-            </div>
-
-            <div className="flex gap-4 mt-6 items-center flex-1">
-              {/* Left: Mysterious Silhouette Miniature Grid */}
-              <div className="w-24 h-24 sm:w-28 sm:h-28 bg-slate-950 rounded-2xl p-2 border border-fuchsia-500/40 aspect-square flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-15 bg-[linear-gradient(45deg,#d946ef_12.5%,transparent_12.5%,transparent_50%,#d946ef_50%,#d946ef_62.5%,transparent_62.5%,transparent_100%)] bg-[length:10px_10px]"></div>
-                {/* Silhouette Shape */}
-                <div className="w-14 h-14 bg-slate-900 border-2 border-fuchsia-500/70 rounded-xl shadow-[0_0_15px_rgba(217,70,239,0.4)] flex items-center justify-center relative">
-                  <span className="text-3xl text-fuchsia-400 font-bold animate-pulse">?</span>
-                </div>
-              </div>
-
-              {/* Right: Target Dimensions & Action */}
-              <div className="flex-1 flex flex-col gap-2">
-                <div className="bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800 text-center">
-                  <div className="text-[10px] text-slate-400">Area = <span className="text-fuchsia-400 font-black text-sm">20</span></div>
-                </div>
-                <div className="bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800 text-center">
-                  <div className="text-[10px] text-slate-400">Perimeter = <span className="text-fuchsia-400 font-black text-sm">22</span></div>
-                </div>
-                <button className="py-1.5 bg-fuchsia-500 hover:bg-fuchsia-400 text-white rounded-xl text-xs font-black shadow-md transition-all active:scale-95">
-                  เดารูปทรงนี้
-                </button>
-              </div>
-            </div>
-
-            <div className="text-[10px] text-fuchsia-300 flex items-center justify-center gap-1.5 mt-2 bg-fuchsia-950/30 py-1 rounded-lg border border-fuchsia-900/30">
-              <Search className="w-3.5 h-3.5" /> เฉลย: มีความเป็นไปได้ 6 แบบ
-            </div>
-          </div>
-
-          {/* 4. BATTLE MODE (Blue Box, Col span 4) */}
-          <div 
-            onClick={() => enterGame('battle')}
-            className="lg:col-span-4 bg-slate-900/90 rounded-3xl border-2 border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.25)] p-4 cursor-pointer transform transition-all duration-300 hover:scale-[1.01] hover:border-blue-400 group relative overflow-hidden flex flex-col justify-between min-h-[220px]"
-          >
-            {/* Header Badge */}
-            <div className="absolute top-0 left-0 bg-blue-500 text-white font-black px-4 py-1 rounded-br-2xl text-xs sm:text-sm tracking-wider flex items-center gap-1.5 shadow-[0_2px_10px_rgba(59,130,246,0.3)]">
-              <Swords className="w-4 h-4" /> BATTLE MODE
-            </div>
-
-            {/* Live Indicator */}
-            <div className="absolute top-2 right-2 flex items-center gap-1">
-              <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping"></span>
-              <span className="text-[9px] font-black tracking-widest text-rose-400">LIVE ห้องเรียน</span>
-            </div>
-
-            <div className="text-[11px] text-slate-300 font-semibold mb-2 mt-4 text-center leading-tight">
-              สร้างรูปพื้นที่ <span className="text-cyan-400 font-black">30</span> ให้มีเส้นรอบรูปมากที่สุด!
-            </div>
-
-            <div className="grid grid-cols-12 gap-2 flex-1">
-              
-              {/* Left Half: Classroom Leaderboard */}
-              <div className="col-span-7 bg-slate-950/80 rounded-xl p-2 border border-slate-800 flex flex-col justify-between">
-                {battleList.map((p, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-[10px] border-b border-slate-900 pb-0.5 last:border-b-0">
-                    <span className="text-slate-300 flex items-center gap-1 max-w-[70px] truncate">
-                      <span className="text-blue-400 font-black">{idx + 1}</span> {p.name}
-                    </span>
-                    <span className="text-white font-black flex items-center gap-0.5">
-                      {p.score} {p.isCrown && <span className="text-yellow-400 text-xs">👑</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Right Half: Live Player VS Graphic */}
-              <div className="col-span-5 flex flex-col items-center justify-center gap-1.5">
-                <div className="flex items-center gap-1">
-                  <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-slate-950 text-[10px] font-black border border-cyan-300 shadow">Me</div>
-                  <span className="text-slate-400 font-bold italic text-[9px]">VS</span>
-                  <div className="w-6 h-6 rounded-full bg-rose-500 flex items-center justify-center text-white text-[10px] font-black border border-rose-300 shadow">ห้อง</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1.5 w-full mt-1">
-                  <div className="bg-slate-950 border border-blue-500/40 p-1 aspect-square rounded-lg flex items-center justify-center">
-                    <div className="w-full h-full bg-blue-500/80 rounded-sm"></div>
-                  </div>
-                  <div className="bg-slate-950 border border-rose-500/40 p-1 aspect-square rounded-lg flex items-center justify-center animate-pulse">
-                    <div className="w-full h-full bg-rose-500/80 rounded-sm"></div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            <button className="w-full mt-2 py-1 bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-colors uppercase tracking-wider">
-              ลงสนามแข่ง
-            </button>
-          </div>
-
-          {/* 5. STORY ADVENTURE (Orange Box, Col span 4) */}
-          <div 
-            onClick={() => enterGame('blueprint')}
-            className="lg:col-span-4 bg-slate-900/90 rounded-3xl border-2 border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.25)] p-4 cursor-pointer transform transition-all duration-300 hover:scale-[1.01] hover:border-orange-400 group relative overflow-hidden flex flex-col justify-between min-h-[220px]"
-          >
-            {/* Header Badge */}
-            <div className="absolute top-0 left-0 bg-orange-500 text-slate-950 font-black px-4 py-1 rounded-br-2xl text-xs sm:text-sm tracking-wider flex items-center gap-1.5 shadow-[0_2px_10px_rgba(249,115,22,0.3)]">
-              <Map className="w-4 h-4 fill-slate-950" /> STORY ADVENTURE
-            </div>
-
-            <div className="grid grid-cols-12 gap-2 mt-6 items-center flex-1">
-              
-              {/* Left Description & Targets */}
-              <div className="col-span-7 flex flex-col justify-between h-full">
-                <div className="text-[10px] text-orange-400 font-bold mb-1 leading-tight">ภารกิจ: สร้างฐานดาวอังคาร</div>
-                
-                <div className="bg-slate-950/80 p-2 rounded-xl border border-slate-800 space-y-1">
-                  <div className="text-[11px] font-bold text-slate-300 flex justify-between">
-                    <span>Area:</span>
-                    <span className="text-cyan-400 font-black">40</span>
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-300 flex justify-between">
-                    <span>Perimeter:</span>
-                    <span className="text-pink-400 font-black">&lt; 30</span>
-                  </div>
-                </div>
-
-                <div className="text-[9px] text-slate-500 italic leading-snug mt-1">
-                  ช่วยนักบินอวกาศประหยัดแร่โดม...
-                </div>
-              </div>
-
-              {/* Right Illustration: Spaceship / Astronaut (Verbatim referenced to typical space themes) */}
-              <div className="col-span-5 flex justify-center items-center relative">
-                <div className="w-16 h-16 bg-slate-950 rounded-full border-2 border-orange-500/40 flex items-center justify-center p-1.5 shadow-lg relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(#f97316_1px,transparent_1px)] opacity-20 [background-size:6px_6px]"></div>
-                  {/* Miniature cute robot helmet outline */}
-                  <div className="w-11 h-11 bg-slate-200 rounded-2xl border-2 border-slate-400 flex flex-col items-center justify-center p-0.5 relative">
-                    <div className="w-9 h-6 bg-slate-800 rounded-lg flex items-center justify-center">
-                      <div className="w-1 h-1 rounded-full bg-cyan-400 animate-ping"></div>
-                    </div>
-                    <div className="w-5 h-2 bg-slate-400 rounded-full mt-1"></div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            <button className="w-full mt-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-xs rounded-xl shadow-md transition-colors uppercase tracking-wider">
-              เริ่มทำภารกิจ
-            </button>
-          </div>
-
-          {/* Bottom Row Options: 6. POWER-UP */}
-          <div className="lg:col-span-3 bg-slate-900/90 rounded-2xl border border-slate-800 p-3.5 shadow-lg">
-            <h3 className="text-xs font-black text-cyan-400 flex items-center gap-1 mb-2.5">
-              <Zap className="w-4 h-4 fill-cyan-400/20" /> POWER-UP ไอเทมช่วยเหลือ
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { name: "Freeze", count: "⏱️ หยุดเวลา 5 วินาที", color: "border-cyan-500/40 text-cyan-400" },
-                { name: "Hint", count: "💡 ใบ้แนวสร้าง", color: "border-amber-500/40 text-amber-400" },
-                { name: "Double", count: "⭐ คะแนน X2", color: "border-fuchsia-500/40 text-fuchsia-400" }
-              ].map((item, idx) => (
-                <div key={idx} className={`bg-slate-950/80 rounded-xl p-1.5 border flex flex-col items-center justify-center text-center select-none ${item.color}`}>
-                  <span className="text-[11px] font-black">{item.name}</span>
-                  <span className="text-[8px] text-slate-400 mt-1">{item.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Bottom Row Options: 7. COLLECTION (SKIN SHOP) */}
-          <div className="lg:col-span-6 bg-slate-900/90 rounded-2xl border border-slate-800 p-3.5 shadow-lg">
-            <h3 className="text-xs font-black text-pink-400 flex items-center gap-1 mb-2.5">
-              <Box className="w-4 h-4 text-pink-400" /> COLLECTION BLOCK SKIN สกินบล็อก
-            </h3>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              {[
-                { id: 'classic', name: 'Classic', color: 'bg-blue-500 border-blue-400' },
-                { id: 'neon', name: 'Neon', color: 'bg-cyan-400 border-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.6)]' },
-                { id: 'pixel', name: 'Pixel', color: 'bg-green-500 border-green-400' },
-                { id: 'minecraft', name: 'Minecraft', color: 'bg-emerald-600 border-yellow-700' },
-                { id: 'space', name: 'Space', color: 'bg-gradient-to-br from-indigo-500 to-purple-600 border-indigo-300' },
-                { id: 'dino', name: 'Dino', color: 'bg-lime-500 border-lime-400' }
-              ].map((s) => (
-                <div 
-                  key={s.id} 
-                  onClick={() => setSkin(s.id)}
-                  className={`min-w-[70px] h-[64px] bg-slate-950/80 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer border transition-all ${currentSkin === s.id ? 'border-pink-500 bg-pink-950/10' : 'border-slate-800 hover:border-slate-700'}`}
-                >
-                  <div className={`w-5 h-5 rounded ${s.color} border`}></div>
-                  <span className="text-[9px] font-bold text-slate-300">{s.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Bottom Row Options: 8. PERFECT BUILD ACHIEVEMENT */}
-          <div className="lg:col-span-3 bg-gradient-to-br from-indigo-950/80 to-purple-950/80 rounded-2xl border-2 border-indigo-500/50 p-3.5 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-lg">
-            <div className="absolute inset-0 bg-[radial-gradient(#6366f1_1px,transparent_1px)] opacity-15 [background-size:8px_8px] pointer-events-none"></div>
-            <Trophy className="w-9 h-9 text-yellow-400 drop-shadow-[0_0_10px_rgba(234,179,8,0.6)] animate-bounce" />
-            <h4 className="text-yellow-300 font-black text-sm italic tracking-wider mt-1 drop-shadow-md">PERFECT BUILD!</h4>
-            <div className="bg-indigo-900/40 px-3 py-0.5 rounded-full text-emerald-400 font-black text-[10px] mt-1 border border-indigo-700">
-              +500 XP ด่านถัดไป
-            </div>
-          </div>
-
-        </div>
-      </main>
-
-      {/* --- Fixed Bottom Navigation mimicking image_43ecf4.jpg --- */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 flex justify-around items-center p-2 pb-safe z-40 shadow-[0_-10px_25px_rgba(0,0,0,0.8)]">
-        
-        {/* Nav 1: Home */}
-        <button className="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-colors">
-          <Home className="w-5 h-5" />
-          <span className="text-[9px] font-bold">หน้าแรก</span>
-        </button>
-
-        {/* Nav 2: Missions */}
-        <button className="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-colors" onClick={() => enterGame('blueprint')}>
-          <ClipboardList className="w-5 h-5" />
-          <span className="text-[9px] font-bold">ภารกิจ</span>
-        </button>
-
-        {/* Nav 3: Play Button (Center Circular Highlighted Button) */}
-        <button 
-          onClick={() => enterGame('creative')}
-          className="flex flex-col items-center gap-1 text-cyan-400 relative transform -translate-y-3.5 transition-transform hover:scale-105 active:scale-95"
-        >
-          <div className="bg-gradient-to-tr from-cyan-500 to-blue-600 p-3 rounded-2xl border-2 border-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.5)]">
-            <Gamepad2 className="w-6 h-6 text-slate-950 fill-current" />
-          </div>
-          <span className="text-[10px] font-black text-cyan-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] absolute bottom-[-18px]">เล่นเลย</span>
-        </button>
-
-        {/* Nav 4: Portfolio */}
-        <button className="flex flex-col items-center gap-1 text-slate-400 hover:text-white transition-colors" onClick={() => enterGame('creative')}>
-          <Star className="w-5 h-5" />
-          <span className="text-[9px] font-bold">ผลงาน</span>
-        </button>
-
-        {/* Nav 5: Shop / Settings Controls */}
-        <div className="flex gap-4">
-          {/* Sounds toggles */}
-          <button 
-            onClick={() => setIsMusicOn(!isMusicOn)}
-            className={`flex flex-col items-center gap-1 transition-colors ${isMusicOn ? 'text-cyan-400' : 'text-slate-500'}`}
-          >
-            <Music className="w-5 h-5" />
-            <span className="text-[9px] font-bold">เพลง</span>
-          </button>
-          
-          <button 
-            onClick={() => setIsSoundOn(!isSoundOn)}
-            className={`flex flex-col items-center gap-1 transition-colors ${isSoundOn ? 'text-cyan-400' : 'text-slate-500'}`}
-          >
-            <Volume2 className="w-5 h-5" />
-            <span className="text-[9px] font-bold">เสียง</span>
-          </button>
-        </div>
-
-      </nav>
-
-    </div>
-  );
-}
-
-function GameEngine({ mode, skin, setSkin, goBack, playerStats, setPlayerStats }) {
-  // Main building grid coordinates
-  const [grid, setGrid] = useState(Array(ROWS).fill().map(() => Array(COLS).fill(false)));
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragMode, setDragMode] = useState(null); // 'add' or 'remove'
-  
-  // Stats
-  const [stats, setStats] = useState({ area: 0, perimeter: 0, symmetry: 3, complexity: 3 });
-  
-  // Powerup counters
-  const [freezeActive, setFreezeActive] = useState(false);
-  const [freezeDuration, setFreezeDuration] = useState(0);
-  const [doubleActive, setDoubleActive] = useState(false);
-
-  // Time Attack & Mystery Level mechanics
-  const [target, setTarget] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [score, setScore] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [combo, setCombo] = useState(0);
-
-  // Blueprint / Adventure Level mechanics
-  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-  const [levelClear, setLevelClear] = useState(false);
-  const [starsEarned, setStarsEarned] = useState(3);
-
-  // Floating score texts
-  const [floaters, setFloaters] = useState([]);
-
-  const timerRef = useRef(null);
-
-  // Floating text feedback helper
-  const addFloater = (text, isSuccess = true) => {
-    const id = Date.now() + Math.random();
-    setFloaters(prev => [...prev, { id, text, isSuccess }]);
-    setTimeout(() => {
-      setFloaters(prev => prev.filter(f => f.id !== id));
-    }, 1500);
-  };
-
-  const calculateStats = useCallback((currentGrid) => {
-    let area = 0;
-    let perimeter = 0;
-    let symmetryScore = 3; 
-    let complexityScore = 3;
-
-    // Boundary check for neighbors
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (currentGrid[r][c]) {
-          area++;
-          // Top
-          if (r === 0 || !currentGrid[r - 1][c]) perimeter++;
-          // Bottom
-          if (r === ROWS - 1 || !currentGrid[r + 1][c]) perimeter++;
-          // Left
-          if (c === 0 || !currentGrid[r][c - 1]) perimeter++;
-          // Right
-          if (c === COLS - 1 || !currentGrid[r][c + 1]) perimeter++;
-        }
-      }
-    }
-
-    // Dynamic Symmetrical approximation check
-    let symmetricMatches = 0;
-    let totalLeftBlocks = 0;
-    const midCol = Math.floor(COLS / 2);
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < midCol; c++) {
-        if (currentGrid[r][c]) {
-          totalLeftBlocks++;
-          const symmetricCol = COLS - 1 - c;
-          if (currentGrid[r][symmetricCol]) {
-            symmetricMatches++;
-          }
-        }
-      }
-    }
-    if (totalLeftBlocks > 0) {
-      const ratio = symmetricMatches / totalLeftBlocks;
-      symmetryScore = Math.min(5, Math.max(1, Math.round(ratio * 5)));
-    } else {
-      symmetryScore = 3;
-    }
-
-    // Complexity approximation based on ratio of Perimeter to Area
-    if (area > 0) {
-      const ratio = perimeter / area;
-      if (ratio > 2.5) complexityScore = 5;
-      else if (ratio > 1.8) complexityScore = 4;
-      else if (ratio > 1.2) complexityScore = 3;
-      else complexityScore = 2;
-    } else {
-      complexityScore = 1;
-    }
-
-    setStats({ area, perimeter, symmetry: symmetryScore, complexity: complexityScore });
-    return { area, perimeter, symmetry: symmetryScore, complexity: complexityScore };
-  }, []);
-
-  const handlePointerDown = (r, c) => {
-    setIsDragging(true);
-    const modeToSet = grid[r][c] ? 'remove' : 'add';
-    setDragMode(modeToSet);
-    updateCell(r, c, modeToSet);
-  };
-
-  const handlePointerEnter = (r, c) => {
-    if (isDragging && dragMode) {
-      updateCell(r, c, dragMode);
-    }
-  };
-
-  // Support swipe/dragging on touchscreen devices!
-  const handleTouchMove = (e) => {
-    if (!isDragging || !dragMode) return;
-    const touch = e.touches[0];
-    const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (targetElement && targetElement.dataset.row && targetElement.dataset.col) {
-      const r = parseInt(targetElement.dataset.row, 10);
-      const c = parseInt(targetElement.dataset.col, 10);
-      updateCell(r, c, dragMode);
-    }
-  };
-
-  const handlePointerUp = () => {
-    setIsDragging(false);
-    setDragMode(null);
-  };
-
-  const updateCell = (r, c, currentDragMode) => {
-    setGrid(prev => {
-      const newGrid = prev.map(row => [...row]);
-      newGrid[r][c] = currentDragMode === 'add';
-      const newStats = calculateStats(newGrid);
-      checkGameRules(newStats, newGrid);
-      return newGrid;
-    });
-  };
-
-  const clearGrid = () => {
-    setGrid(Array(ROWS).fill().map(() => Array(COLS).fill(false)));
-    setStats({ area: 0, perimeter: 0, symmetry: 1, complexity: 1 });
-  };
-
-  const activateFreeze = () => {
-    if (freezeActive) return;
-    setFreezeActive(true);
-    setFreezeDuration(5);
-    addFloater("⏱️ FREEZE TIME!", true);
-  };
-
-  const activateDouble = () => {
-    if (doubleActive) return;
-    setDoubleActive(true);
-    addFloater("🔥 2X XP ACTIVE!", true);
-  };
-
-  const activateHint = () => {
-    addFloater("💡 ใบ้: สร้างรูปสมมาตร!", true);
-  };
-
-  const startGameSession = () => {
-    setScore(0);
-    setCombo(0);
-    setLevelClear(false);
-    clearGrid();
-    setIsPlaying(true);
-
-    if (mode === 'time_attack' || mode === 'mystery') {
-      setTimeLeft(60);
-      generateRandomTarget();
-    } else if (mode === 'blueprint') {
-      setTimeLeft(ADVENTURE_LEVELS[currentLevelIndex].timeLimit);
-    }
-  };
-
-  const generateRandomTarget = () => {
-    const nextTarget = GAME_TARGETS[Math.floor(Math.random() * GAME_TARGETS.length)];
-    setTarget(nextTarget);
-  };
-
-  const checkGameRules = (currentStats, currentGrid) => {
-    if (!isPlaying) return;
-
-    if (mode === 'time_attack' || mode === 'mystery') {
-      if (target && currentStats.area === target.area && currentStats.perimeter === target.perimeter) {
-        // Correct answer matched!
-        let basePoints = doubleActive ? 200 : 100;
-        setScore(s => s + basePoints);
-        setCombo(c => c + 1);
-        
-        // Bonus time for correct answer
-        setTimeLeft(t => Math.min(t + 8, 90));
-        addFloater(`⭐ PERFECT! +${basePoints} XP`, true);
-        
-        // Sparkle reward coins
-        setPlayerStats(prev => ({
-          ...prev,
-          coins: prev.coins + 50,
-          xp: Math.min(prev.xp + 5, 100)
-        }));
-
-        // Reset grid for next round
-        setGrid(Array(ROWS).fill().map(() => Array(COLS).fill(false)));
-        setDoubleActive(false); // consume double points
-        generateRandomTarget();
-      }
-    } else if (mode === 'blueprint') {
-      const activeLvl = ADVENTURE_LEVELS[currentLevelIndex];
-      // Check if current stats match the levels target condition
-      const isAreaValid = currentStats.area === activeLvl.targetArea;
-      const isPerimeterValid = activeLvl.id === 2 
-        ? currentStats.perimeter < activeLvl.targetPerimeter 
-        : currentStats.perimeter === activeLvl.targetPerimeter;
-
-      if (isAreaValid && isPerimeterValid) {
-        setIsPlaying(false);
-        setLevelClear(true);
-        
-        // Calculate stars based on remaining time percentage
-        const timeRatio = timeLeft / activeLvl.timeLimit;
-        let stars = 1;
-        if (timeRatio > 0.5) stars = 3;
-        else if (timeRatio > 0.25) stars = 2;
-        setStarsEarned(stars);
-
-        setPlayerStats(prev => ({
-          ...prev,
-          coins: prev.coins + 150 * stars,
-          xp: Math.min(prev.xp + 15 * stars, 100),
-          crowns: prev.crowns + 100
-        }));
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (isPlaying && (mode === 'time_attack' || mode === 'mystery' || mode === 'blueprint')) {
-      timerRef.current = setInterval(() => {
-        // Handle freeze duration countdown
-        if (freezeActive) {
-          setFreezeDuration(d => {
-            if (d <= 1) {
-              setFreezeActive(false);
-              return 0;
-            }
-            return d - 1;
-          });
-          return; // skip timer countdown while frozen
-        }
-
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            setIsPlaying(false);
-            addFloater("🔴 หมดเวลา!", false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [isPlaying, mode, freezeActive]);
-
-  useEffect(() => {
-    // Standard setup
-    if (mode === 'creative') {
-      setIsPlaying(true);
-    } else {
-      startGameSession();
-    }
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>อาณาจักรสัตว์มีกระดูกสันหลัง (Vertebrates Adventure)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- FontAwesome (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;600;700&display=swap" rel="stylesheet">
     
-    // Add global pointer release event
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointerup', handlePointerUp);
-    };
-  }, [mode]);
-
-  const getBlockStyle = (isFilled) => {
-    if (!isFilled) return 'bg-[#12182d]/80 hover:bg-[#1a2341] border border-slate-800/40';
-    switch (skin) {
-      case 'neon':
-        return 'bg-cyan-400 border border-cyan-200 shadow-[0_0_12px_rgba(34,211,238,0.95)] rounded-md';
-      case 'pixel':
-        return 'bg-green-500 border-2 border-green-700 rounded-none';
-      case 'minecraft':
-        return 'bg-emerald-600 border-2 border-b-yellow-800 border-r-yellow-800 border-t-emerald-400 border-l-emerald-400 rounded-none';
-      case 'space':
-        return 'bg-gradient-to-br from-indigo-400 to-purple-600 border border-indigo-300 shadow-[0_0_10px_rgba(139,92,246,0.6)] rounded-full scale-90';
-      case 'dino':
-        return 'bg-lime-500 border-2 border-b-green-800 border-r-green-800 border-lime-300 rounded-lg scale-95';
-      case 'classic':
-      default:
-        return 'bg-blue-500 border border-blue-400 rounded-sm';
-    }
-  };
-
-  const getModeThemeColor = () => {
-    switch (mode) {
-      case 'time_attack': return 'text-rose-400 border-rose-500/50 bg-rose-500/10';
-      case 'mystery': return 'text-fuchsia-400 border-fuchsia-500/50 bg-fuchsia-500/10';
-      case 'blueprint': return 'text-orange-400 border-orange-500/50 bg-orange-500/10';
-      case 'battle': return 'text-blue-400 border-blue-500/50 bg-blue-500/10';
-      case 'creative':
-      default: return 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10';
-    }
-  };
-
-  return (
-    <div className="flex-1 flex flex-col min-h-screen relative z-20">
-      
-      {/* --- Game View Header --- */}
-      <header className="bg-slate-900/90 border-b border-slate-800 p-3 sm:p-4 shrink-0 flex justify-between items-center shadow-lg">
-        <button 
-          onClick={goBack} 
-          className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 font-bold text-xs sm:text-sm transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" /> <span className="hidden sm:inline">หน้าหลัก</span>
-        </button>
-
-        {/* Level Banner */}
-        <div className={`px-4 py-1.5 rounded-full border text-xs sm:text-sm font-black uppercase tracking-wider flex items-center gap-1.5 ${getModeThemeColor()}`}>
-          {mode === 'creative' && <><PaintBucket className="w-4 h-4" /> CREATIVE MODE</>}
-          {mode === 'time_attack' && <><Timer className="w-4 h-4" /> TIME ATTACK MODE</>}
-          {mode === 'mystery' && <><HelpCircle className="w-4 h-4" /> MYSTERY SHAPE</>}
-          {mode === 'blueprint' && <><Map className="w-4 h-4" /> ADVENTURE MODE</>}
-          {mode === 'battle' && <><Swords className="w-4 h-4" /> LIVE BATTLE CHALLENGE</>}
-        </div>
-
-        {/* Clear Tool */}
-        <button 
-          onClick={clearGrid}
-          className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-400 hover:text-white transition-colors"
-          title="Clear Board"
-        >
-          <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
-      </header>
-
-      {/* --- Game Workspace --- */}
-      <main className="flex-1 flex flex-col lg:flex-row p-3 sm:p-6 gap-4 overflow-y-auto pb-24">
+    <style>
+        body {
+            font-family: 'Mali', cursive;
+            margin: 0;
+            overflow: hidden;
+            background-color: #111827;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
         
-        {/* Left Interactive panel: Controls & Targets */}
-        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
-          
-          {/* Active Mode Stats / Challenge Indicators */}
-          {(mode === 'time_attack' || mode === 'mystery') && (
-            <div className="bg-slate-900/95 border border-slate-800 p-5 rounded-3xl shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 blur-3xl rounded-full pointer-events-none"></div>
-              
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">คะแนนรวม</span>
-                  <span className="text-3xl font-black text-yellow-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">{score}</span>
-                </div>
+        .game-container {
+            width: 100vw;
+            height: 100vh;
+            max-width: 500px; /* บังคับสัดส่วนแนวตั้ง Mobile-First ให้ดูพรีเมียม */
+            margin: 0 auto;
+            position: relative;
+            background: linear-gradient(to bottom, #1e3a8a 0%, #3b82f6 50%, #93c5fd 100%);
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border-left: 4px solid #3b82f6;
+            border-right: 4px solid #3b82f6;
+        }
 
-                <div className={`flex flex-col items-end`}>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">เวลาที่เหลือ</span>
-                  <div className={`text-xl sm:text-2xl font-black flex items-center gap-1 ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : 'text-slate-300'}`}>
-                    <Timer className="w-5 h-5" /> {freezeActive ? `FROZEN` : `${timeLeft}s`}
-                  </div>
-                </div>
-              </div>
+        /* Animations */
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(1deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .animate-float { animation: float 4s ease-in-out infinite; }
 
-              {/* Targets displaying Area & Perimeter values to reach */}
-              {isPlaying && target ? (
-                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 text-center">
-                  <div className="text-[11px] text-slate-400 font-bold mb-3">🎯 ด่านสุ่ม: {mode === 'mystery' ? '???' : target.name}</div>
-                  
-                  <div className="grid grid-cols-2 gap-3.5">
-                    <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] text-slate-400 font-bold">AREA เป้าหมาย</div>
-                      <div className="text-3xl font-black text-cyan-400">{target.area}</div>
-                    </div>
-                    <div className="bg-slate-900 p-3 rounded-xl border border-slate-800">
-                      <div className="text-[10px] text-slate-400 font-bold">PERIMETER เป้าหมาย</div>
-                      <div className="text-3xl font-black text-pink-400">{target.perimeter}</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <button 
-                  onClick={startGameSession}
-                  className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95"
-                >
-                  เริ่มท้าทายภารกิจ
-                </button>
-              )}
-            </div>
-          )}
+        @keyframes bounce-gentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-gentle { animation: bounce-gentle 2s ease-in-out infinite; }
+        
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(253, 224, 71, 0.8); }
+            70% { box-shadow: 0 0 0 15px rgba(253, 224, 71, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(253, 224, 71, 0); }
+        }
+        .node-active { animation: pulse-glow 2s infinite; }
 
-          {/* Blueprint Mode Progress details */}
-          {mode === 'blueprint' && (
-            <div className="bg-slate-900/95 border border-slate-800 p-5 rounded-3xl shadow-xl">
-              <div className="text-xs font-black text-orange-400 mb-2">ภารกิจที่ {ADVENTURE_LEVELS[currentLevelIndex].id}</div>
-              <h3 className="text-lg font-black text-white mb-1">{ADVENTURE_LEVELS[currentLevelIndex].name}</h3>
-              <p className="text-xs text-slate-400 mb-4">{ADVENTURE_LEVELS[currentLevelIndex].description}</p>
+        @keyframes fall {
+            0% { transform: translateY(-50px) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(105vh) rotate(360deg); opacity: 0; }
+        }
+        .falling-item {
+            position: absolute;
+            animation: fall linear forwards;
+        }
 
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3.5 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-400">ขนาดความยาวสะสม:</span>
-                  <span className="text-sm font-black text-cyan-400">Area = {ADVENTURE_LEVELS[currentLevelIndex].targetArea}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-400">ข้อจำกัดขอบสระ:</span>
-                  <span className="text-sm font-black text-pink-400">
-                    {ADVENTURE_LEVELS[currentLevelIndex].id === 2 ? `Perimeter < ${ADVENTURE_LEVELS[currentLevelIndex].targetPerimeter}` : `Perimeter = ${ADVENTURE_LEVELS[currentLevelIndex].targetPerimeter}`}
-                  </span>
-                </div>
-              </div>
+        .map-bg {
+            background: radial-gradient(circle, #86efac 10%, #4ade80 60%, #16a34a 100%);
+            background-size: cover;
+        }
 
-              {!isPlaying ? (
-                <button 
-                  onClick={startGameSession}
-                  className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-sm rounded-xl transition-all"
-                >
-                  START MISSION
-                </button>
-              ) : (
-                <div className="text-center py-2 bg-slate-950/60 rounded-xl border border-slate-800">
-                  <span className="text-xs text-slate-400">จำกัดเวลาเหลือ</span>
-                  <div className="text-2xl font-black text-orange-400 mt-1">{timeLeft}s</div>
-                </div>
-              )}
-            </div>
-          )}
+        .star-bg {
+            background: linear-gradient(to bottom, #020617, #0f172a, #1e293b);
+        }
 
-          {/* Live Real-time Builder Stats */}
-          <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-3xl shadow-xl flex flex-col gap-3">
-            <span className="text-xs font-black text-slate-400 tracking-wider">ขนาดที่คุณสร้างได้ขณะนี้</span>
+        /* Glassmorphism & Cartoon Panels */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border: 4px solid #1e3a8a;
+            box-shadow: 0 8px 0px #1e3a8a, 0 15px 20px rgba(0,0,0,0.3);
+            border-radius: 1.5rem;
+        }
+
+        .cartoon-btn {
+            transition: all 0.15s ease-in-out;
+            border-bottom-width: 6px;
+        }
+        .cartoon-btn:active {
+            transform: translateY(4px);
+            border-bottom-width: 2px;
+        }
+
+        /* --- 3D CARD FLIP STYLES (CRITICAL FIX FOR ALL BROWSERS) --- */
+        .perspective-container {
+            perspective: 1000px;
+            -webkit-perspective: 1000px;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            -webkit-transform-style: preserve-3d;
+        }
+        .card-inner.flipped {
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+        .card-front {
+            background-color: #fbbf24; /* bg-amber-400 */
+            border: 4px solid #78350f; /* border-amber-900 */
+            transform: rotateY(0deg);
+            -webkit-transform: rotateY(0deg);
+        }
+        .card-back {
+            background-color: #ffffff;
+            border: 4px solid #78350f;
+            transform: rotateY(180deg);
+            -webkit-transform: rotateY(180deg);
+        }
+
+        /* Scrollbar customizing */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- AUDIO ENGINE (Web Audio API Synthesizer) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let isMuted = false;
+        
+        const playSound = (type) => {
+            if (isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center flex flex-col justify-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase">Area (ตารางหน่วย)</span>
-                <span className="text-3xl font-black text-cyan-400 mt-1">{stats.area}</span>
-              </div>
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center flex flex-col justify-center">
-                <span className="text-[10px] text-slate-500 font-bold uppercase">Perimeter (รอบรูป)</span>
-                <span className="text-3xl font-black text-pink-400 mt-1">{stats.perimeter}</span>
-              </div>
-            </div>
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
 
-            {mode === 'creative' && (
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 mt-1">
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>ความสมมาตร (Symmetry)</span>
-                  <span className="text-yellow-400 font-black">{'★'.repeat(stats.symmetry)}{'☆'.repeat(5 - stats.symmetry)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>ความซับซ้อน (Complexity)</span>
-                  <span className="text-yellow-400 font-black">{'★'.repeat(stats.complexity)}{'☆'.repeat(5 - stats.complexity)}</span>
-                </div>
-              </div>
-            )}
-          </div>
+            const now = audioCtx.currentTime;
+            
+            if (type === 'coin') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, now); // D5
+                osc.frequency.setValueAtTime(880, now + 0.08); // A5
+                gainNode.gain.setValueAtTime(0.15, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'jump') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+                gainNode.gain.setValueAtTime(0.2, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'win') {
+                // Happy chord
+                const freqs = [523.25, 659.25, 783.99, 1046.50]; // C E G C
+                freqs.forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = 'sine';
+                    o.connect(g);
+                    g.connect(audioCtx.destination);
+                    o.frequency.setValueAtTime(f, now + i * 0.08);
+                    g.gain.setValueAtTime(0.1, now + i * 0.08);
+                    g.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    o.start(now + i * 0.08);
+                    o.stop(now + 0.5);
+                });
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+                gainNode.gain.setValueAtTime(0.15, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            }
+        };
 
-          {/* Quick Item assistance bar */}
-          {(mode === 'time_attack' || mode === 'mystery' || mode === 'blueprint') && isPlaying && (
-            <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-3xl shadow-xl">
-              <span className="text-xs font-black text-cyan-400 block mb-3">กดใช้ไอเทมช่วยเหลือ</span>
-              
-              <div className="grid grid-cols-3 gap-2">
-                <button 
-                  onClick={activateFreeze} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all ${freezeActive ? 'bg-cyan-500 text-slate-950 border-cyan-300' : 'bg-slate-950 text-cyan-400 border-cyan-500/20 hover:border-cyan-500/50'}`}
-                >
-                  ❄️ Freeze
-                </button>
-                <button 
-                  onClick={activateHint} 
-                  className="py-2 px-1 rounded-xl text-xs font-bold bg-slate-950 text-amber-400 border border-amber-500/20 hover:border-amber-500/50 transition-all"
-                >
-                  💡 Hint
-                </button>
-                <button 
-                  onClick={activateDouble} 
-                  className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all ${doubleActive ? 'bg-fuchsia-500 text-white border-fuchsia-300' : 'bg-slate-950 text-fuchsia-400 border-fuchsia-500/20 hover:border-fuchsia-500/50'}`}
-                >
-                  ⭐ Double
-                </button>
-              </div>
-            </div>
-          )}
+        // --- DATABASE ---
+        const ZONES = [
+            { id: 1, name: "เมืองใต้ทะเล", type: "ปลา", icon: "🐟", color: "bg-blue-500", border: "border-blue-700", top: "72%", left: "25%", info: "อาศัยในน้ำ, หายใจด้วยเหงือก, มีครีบช่วยว่ายน้ำ, อุณหภูมิร่างกายเปลี่ยนตามน้ำ (สัตว์เลือดเย็น)" },
+            { id: 2, name: "บึงมหัศจรรย์", type: "สัตว์สะเทินน้ำสะเทินบก", icon: "🐸", color: "bg-emerald-500", border: "border-emerald-700", top: "58%", left: "75%", info: "อยู่ได้ทั้งบนบกและในน้ำ, ผิวหนังเปียกชื้นไม่มีเกล็ด, วางไข่ในน้ำ, ตอนเด็กใช้เหงือก โตขึ้นใช้ปอดและผิวหนัง" },
+            { id: 3, name: "ทะเลทรายมังกร", type: "สัตว์เลื้อยคลาน", icon: "🦎", color: "bg-amber-600", border: "border-amber-800", top: "40%", left: "25%", info: "ผิวหนังหนา แห้ง มีเกล็ดแข็งปกคลุม, หายใจด้วยปอด, วางไข่บนบกมีเปลือกเหนียวหุ้ม" },
+            { id: 4, name: "ป่าท้องฟ้า", type: "นก", icon: "🐦", color: "bg-sky-400", border: "border-sky-600", top: "24%", left: "75%", info: "มีขนเป็นแผงปกคลุมร่างกาย, ขาคู่หน้าพัฒนาเป็นปีก, กระดูกกลวงและเบาช่วยให้บินได้, ออกลูกเป็นไข่" },
+            { id: 5, name: "ป่ามหัศจรรย์", type: "สัตว์เลี้ยงลูกด้วยนม", icon: "🐘", color: "bg-pink-500", border: "border-pink-700", top: "10%", left: "30%", info: "ตัวเมียมีต่อมน้ำนมเลี้ยงลูก, มีขนเป็นเส้นๆ, หายใจด้วยปอด, ส่วนใหญ่ออกลูกเป็นตัวและเป็นสัตว์เลือดอุ่น" }
+        ];
 
-          {/* Block Skin Selector directly in Workspace */}
-          <div className="bg-slate-900/95 border border-slate-800 p-4 rounded-3xl shadow-xl">
-            <span className="text-xs font-black text-pink-400 block mb-3">เปลี่ยนสกินขณะเล่น</span>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'neon', label: 'Neon' },
-                { id: 'pixel', label: 'Pixel' },
-                { id: 'minecraft', label: 'Minecraft' }
-              ].map(item => (
-                <button 
-                  key={item.id}
-                  onClick={() => setSkin(item.id)}
-                  className={`py-1 rounded-lg text-xs font-black border ${skin === item.id ? 'border-pink-500 bg-pink-500/10 text-white' : 'border-slate-800 text-slate-400'}`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        // --- COMPONENTS ---
 
-        </div>
-
-        {/* Right workspace: Main Grid Canvas */}
-        <div className={`flex-1 bg-slate-950/80 rounded-[32px] border-2 p-4 sm:p-8 flex items-center justify-center relative min-h-[350px] transition-all ${freezeActive ? 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.2)]' : 'border-slate-800'}`}>
-          
-          {/* Frozen Ice Visual Filter Overlay */}
-          {freezeActive && (
-            <div className="absolute inset-0 bg-cyan-950/20 backdrop-blur-[1px] rounded-[30px] pointer-events-none z-10 border border-cyan-500/20">
-              <div className="absolute top-4 left-4 text-cyan-400 text-xs font-bold animate-pulse flex items-center gap-1.5">
-                ❄️ หยุดเวลามือถือชั่วคราว ({freezeDuration}s)
-              </div>
-            </div>
-          )}
-
-          {/* Floaters scoring animations */}
-          <div className="absolute inset-0 pointer-events-none z-30 flex flex-col items-center justify-center overflow-hidden">
-            {floaters.map(f => (
-              <div 
-                key={f.id} 
-                className={`text-2xl sm:text-4xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] animate-bounce mb-2 ${f.isSuccess ? 'text-emerald-400' : 'text-rose-500'}`}
-              >
-                {f.text}
-              </div>
-            ))}
-          </div>
-
-          {/* The Drawing Grid Board */}
-          <div className="relative z-0 w-full max-w-[850px] touch-none select-none" style={{ touchAction: 'none' }}>
-            <div 
-              className={`grid bg-slate-900/90 p-2 rounded-2xl shadow-2xl border transition-all duration-300 ${freezeActive ? 'border-cyan-500 shadow-cyan-900/10' : 'border-slate-800'}`}
-              style={{ 
-                gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`, 
-                aspectRatio: `${COLS}/${ROWS}`,
-                gap: skin === 'pixel' || skin === 'minecraft' ? '1px' : '2.5px'
-              }}
-              onTouchMove={handleTouchMove}
-              onMouseLeave={handlePointerUp}
+        const Button = ({ children, onClick, color = "bg-yellow-400 border-yellow-600 hover:bg-yellow-300", className = "" }) => (
+            <button 
+                onClick={() => { playSound('coin'); onClick(); }}
+                className={`cartoon-btn text-blue-900 font-bold py-3 px-6 rounded-2xl border-b-[6px] active:border-b-[2px] transition-all text-lg active:scale-95 flex items-center justify-center gap-2 ${color} ${className}`}
             >
-              {grid.map((row, r) => (
-                row.map((isFilled, c) => (
-                  <div
-                    key={`${r}-${c}`}
-                    data-row={r}
-                    data-col={c}
-                    onPointerDown={() => handlePointerDown(r, c)}
-                    onPointerEnter={() => handlePointerEnter(r, c)}
-                    onPointerUp={handlePointerUp}
-                    className={`w-full h-full transition-all duration-100 ${getBlockStyle(isFilled)}`}
-                  />
-                ))
-              ))}
-            </div>
-          </div>
+                {children}
+            </button>
+        );
 
-          {/* Success Dialog Modal for Adventure Level completed */}
-          {levelClear && (
-            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-40 rounded-[30px] p-6 text-center animate-fade-in">
-              <div className="max-w-md w-full bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_30px_rgba(99,102,241,0.35)] relative overflow-hidden">
-                <div className="absolute -top-12 -left-12 w-28 h-28 bg-indigo-500/20 blur-2xl rounded-full"></div>
+        // Header Helper (Mute sound and simple status)
+        const GameHeader = ({ onMuteToggle, isMutedState, onBackMenu }) => (
+            <div className="absolute top-3 left-3 right-3 flex justify-between items-center z-50">
+                {onBackMenu ? (
+                    <button onClick={onBackMenu} className="w-10 h-10 bg-white/90 border-2 border-blue-900 text-blue-900 rounded-full flex items-center justify-center font-bold active:scale-95 shadow">
+                        <i className="fa-solid fa-house"></i>
+                    </button>
+                ) : <div className="w-10"></div>}
                 
-                <Trophy className="w-16 h-16 text-yellow-400 mx-auto drop-shadow-[0_0_15px_rgba(234,179,8,0.6)] animate-bounce mb-3" />
-                <h3 className="text-2xl font-black text-white italic tracking-wider">LEVEL CLEARED!</h3>
-                <p className="text-xs text-slate-400 mt-1">คุณสร้างแบบฐานได้อย่างถูกต้องและรวดเร็ว</p>
-
-                {/* Rating Stars award */}
-                <div className="flex justify-center gap-2 my-5 text-4xl">
-                  {Array(3).fill(0).map((_, i) => (
-                    <span 
-                      key={i} 
-                      className={`transition-transform duration-500 delay-${i * 200} ${i < starsEarned ? 'text-yellow-400 scale-110 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]' : 'text-slate-700'}`}
-                    >
-                      ★
-                    </span>
-                  ))}
-                </div>
-
-                <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 flex justify-around mb-6 text-sm">
-                  <div>
-                    <span className="text-slate-400 text-xs block">เหรียญทอง</span>
-                    <span className="text-yellow-400 font-black">+{starsEarned * 150} 🪙</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-xs block">รางวัล XP</span>
-                    <span className="text-emerald-400 font-black">+{starsEarned * 15} XP ⭐</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button 
+                <button 
                     onClick={() => {
-                      setLevelClear(false);
-                      clearGrid();
-                      // Next level sequence
-                      if (currentLevelIndex < ADVENTURE_LEVELS.length - 1) {
-                        setCurrentLevelIndex(i => i + 1);
-                      } else {
-                        setCurrentLevelIndex(0); // Loop back
-                      }
-                    }}
-                    className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black rounded-xl text-xs sm:text-sm tracking-wide"
-                  >
-                    ภารกิจถัดไป
-                  </button>
-                  <button 
-                    onClick={goBack}
-                    className="py-3 px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs border border-slate-700"
-                  >
-                    หน้าแรก
-                  </button>
-                </div>
-              </div>
+                        isMuted = !isMuted;
+                        onMuteToggle(isMuted);
+                    }} 
+                    className="w-10 h-10 bg-white/90 border-2 border-blue-900 text-blue-900 rounded-full flex items-center justify-center font-bold active:scale-95 shadow"
+                >
+                    <i className={`fa-solid ${isMutedState ? 'fa-volume-mute text-red-500' : 'fa-volume-high text-green-600'}`}></i>
+                </button>
             </div>
-          )}
+        );
 
-        </div>
+        // 1. Scene: Main Menu
+        const MainMenu = ({ onStart }) => (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 bg-[linear-gradient(to_bottom,rgba(30,58,138,0.3),rgba(30,58,138,0.7)),url('https://www.transparenttextures.com/patterns/cubes.png')] relative">
+                <div className="absolute inset-0 bg-blue-900/10"></div>
+                
+                <div className="relative z-10 glass-panel p-6 w-full max-w-sm animate-float border-t-8 border-t-yellow-400">
+                    <div className="text-7xl mb-4 animate-bounce-gentle">🌍🐢🐾</div>
+                    <h1 className="text-3xl font-bold text-blue-900 mb-1 leading-tight">อาณาจักรสัตว์</h1>
+                    <h2 className="text-xl font-bold text-green-600 mb-6 bg-green-100 py-1 px-4 rounded-full inline-block">มีกระดูกสันหลัง 🦴</h2>
+                    <p className="text-gray-700 text-sm mb-6 leading-relaxed">
+                        มาร่วมเดินทางเป็น "นักสำรวจตัวน้อย"<br/>
+                        เพื่อรวบรวมกลุ่มสัตว์ทั้ง 5 และช่วยต้นไม้แห่งชีวิต!
+                    </p>
+                    <Button onClick={onStart} className="w-full text-xl py-4 bg-green-400 border-green-600 hover:bg-green-300 text-white shadow-lg">
+                        <i className="fa-solid fa-compass animate-spin mr-1"></i> เริ่มต้นเดินทาง!
+                    </Button>
+                </div>
+                
+                <div className="absolute bottom-4 text-xs text-white/70">
+                    พัฒนาเพื่อการศึกษาสำหรับนักเรียนระดับประถมศึกษา 🎒
+                </div>
+            </div>
+        );
 
-      </main>
+        // 2. Scene: Register (ลงชื่อ ชั้น เลขที่)
+        const RegisterScreen = ({ onRegister }) => {
+            const [name, setName] = React.useState('');
+            const [grade, setGrade] = React.useState('ป.1');
+            const [room, setRoom] = React.useState('1');
+            const [no, setNo] = React.useState('');
+            const [error, setError] = React.useState('');
 
-    </div>
-  );
-}
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!name.trim()) {
+                    setError('กรุณากรอกชื่อ-นามสกุล ด้วยนะจ๊ะเด็กๆ!');
+                    playSound('wrong');
+                    return;
+                }
+                if (!no || isNaN(no) || parseInt(no) <= 0) {
+                    setError('กรุณากรอกเลขที่ให้ถูกต้องนะจ๊ะ!');
+                    playSound('wrong');
+                    return;
+                }
+                onRegister({ name, class: `${grade}/${room}`, no });
+            };
+
+            return (
+                <div className="h-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-teal-400 to-blue-600">
+                    <div className="glass-panel p-6 w-full max-w-sm relative border-t-8 border-t-teal-500">
+                        <div className="text-center mb-4">
+                            <span className="text-5xl">📝</span>
+                            <h2 className="text-2xl font-bold text-blue-900 mt-2">ข้อมูลผู้สำรวจ</h2>
+                            <p className="text-xs text-gray-500">กรอกข้อมูลเพื่อรับเกียรติบัตรตอนเล่นจบเกมนะ!</p>
+                        </div>
+
+                        {error && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded-xl text-xs mb-3 text-center animate-bounce">
+                                ⚠️ {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-700 font-bold text-sm mb-1">✍️ ชื่อ - นามสกุล</label>
+                                <input 
+                                    type="text" 
+                                    value={name} 
+                                    onChange={(e) => { setName(e.target.value); setError(''); }}
+                                    placeholder="เด็กชาย/เด็กหญิง..."
+                                    className="w-full px-4 py-2 rounded-xl border-2 border-blue-200 focus:border-blue-500 outline-none text-gray-800 text-sm"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-gray-700 font-bold text-sm mb-1">🎒 ชั้นเรียน</label>
+                                    <div className="flex gap-1">
+                                        <select 
+                                            value={grade} 
+                                            onChange={(e) => setGrade(e.target.value)}
+                                            className="w-1/2 px-2 py-2 rounded-xl border-2 border-blue-200 text-gray-800 text-sm"
+                                        >
+                                            {['ป.1', 'ป.2', 'ป.3', 'ป.4', 'ป.5', 'ป.6'].map(g => (
+                                                <option key={g} value={g}>{g}</option>
+                                            ))}
+                                        </select>
+                                        <select 
+                                            value={room} 
+                                            onChange={(e) => setRoom(e.target.value)}
+                                            className="w-1/2 px-2 py-2 rounded-xl border-2 border-blue-200 text-gray-800 text-sm"
+                                        >
+                                            {[1,2,3,4,5,6,7,8].map(r => (
+                                                <option key={r} value={r}>/{r}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-gray-700 font-bold text-sm mb-1">🔢 เลขที่</label>
+                                    <input 
+                                        type="number" 
+                                        value={no} 
+                                        onChange={(e) => { setNo(e.target.value); setError(''); }}
+                                        placeholder="เลขที่"
+                                        min="1"
+                                        className="w-full px-4 py-2 rounded-xl border-2 border-blue-200 focus:border-blue-500 outline-none text-gray-800 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <Button onClick={() => {}} className="w-full bg-yellow-400 border-yellow-600 text-lg py-3 mt-4">
+                                <i className="fa-solid fa-clipboard-check mr-1"></i> ยืนยันข้อมูล 🌟
+                            </Button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. Scene: Intro Story
+        const IntroStory = ({ onNext, studentInfo }) => {
+            const [step, setStep] = React.useState(0);
+            const dialogs = [
+                `ยินดีต้อนรับนักสำรวจ "คุณครูเต่าน้อย" ดีใจมากๆ ที่ได้รู้จักนะจ๊ะ คุณ ${studentInfo.name}!`,
+                "ตอนนี้ต้นไม้แห่งชีวิตในอาณาจักรเรากำลังเฉาตาย เพราะเด็กๆ เริ่มสับสนประเภทของพวกเราแล้ว...",
+                "สัตว์มีกระดูกสันหลัง คือพวกที่มีโครงกระดูกช่วยพยุงร่างและป้องกันระบบประสาทนะจ๊ะ",
+                "เธอต้องเดินทางไปรวบรวมแก่นพลังจากสัตว์ทั้ง 5 ดินแดน และมาปราบ 'ราชาสับสน' กัน!",
+                "ถ้าพร้อมแล้วสะพายกระเป๋าเป้ แล้วเริ่มเดินทางได้เลยจ้า!"
+            ];
+
+            return (
+                <div className="h-full flex flex-col items-center justify-end pb-12 px-6 bg-gradient-to-b from-sky-400 to-emerald-400">
+                    <div className="text-8xl mb-6 animate-float">🐢</div>
+                    <div className="glass-panel p-5 w-full max-w-sm relative text-center border-t-8 border-t-blue-500">
+                        <div className="absolute -top-4 left-6 bg-blue-950 text-white px-4 py-1 rounded-full text-xs font-bold">
+                            ศาสตราจารย์เต่าน้อย
+                        </div>
+                        <p className="text-blue-950 text-base font-semibold mb-6 mt-2 leading-relaxed">{dialogs[step]}</p>
+                        <Button 
+                            onClick={() => {
+                                if (step < dialogs.length - 1) setStep(step + 1);
+                                else onNext();
+                            }}
+                            className="mx-auto w-full max-w-[200px]"
+                        >
+                            {step < dialogs.length - 1 ? 'ถัดไป ➡️' : 'เริ่มภารกิจ! 🚀'}
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Scene: World Map
+        const WorldMap = ({ saveFile, onSelectLevel, onOpenBook, studentInfo }) => {
+            // Calculate progress percentage
+            const progress = (saveFile.completedLevels.length / 5) * 100;
+
+            return (
+                <div className="h-full relative map-bg">
+                    {/* Top UI Panel */}
+                    <div className="absolute top-16 left-3 right-3 flex flex-col gap-2 z-10">
+                        <div className="glass-panel p-3 bg-white/95 border-blue-900 rounded-2xl flex flex-col gap-1 shadow-md">
+                            <div className="flex justify-between items-center">
+                                <div className="text-xs text-blue-950 font-bold flex items-center gap-1">
+                                    <span className="text-sm">🤠</span> {studentInfo.name} <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[10px]">ชั้น {studentInfo.class} เลขที่ {studentInfo.no}</span>
+                                </div>
+                                <div className="text-white font-bold flex items-center bg-yellow-500 border-2 border-yellow-600 px-3 py-0.5 rounded-full text-xs">
+                                    <span className="text-yellow-100 mr-1">⭐</span> {saveFile.stars}
+                                </div>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="w-full bg-blue-100 h-3.5 rounded-full overflow-hidden border-2 border-blue-950 mt-1 flex items-center relative">
+                                <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                <span className="absolute w-full text-center text-[9px] font-bold text-blue-950">ความคืบหน้า {Math.round(progress)}%</span>
+                            </div>
+                        </div>
+
+                        {/* Special Actions */}
+                        <div className="flex justify-end gap-2">
+                            <Button onClick={onOpenBook} color="bg-purple-400 border-purple-600 hover:bg-purple-300 text-white" className="!py-1.5 !px-4 text-xs">
+                                <i className="fa-solid fa-book mr-1"></i> สมุดสะสมสัตว์ 📖
+                            </Button>
+                        </div>
+                    </div>
+                    
+                    {/* Map Nodes */}
+                    {ZONES.map((zone) => {
+                        const isUnlocked = saveFile.unlockedLevels >= zone.id;
+                        const isCompleted = saveFile.completedLevels.includes(zone.id);
+                        return (
+                            <div 
+                                key={zone.id}
+                                className={`absolute flex flex-col items-center transition-all ${!isUnlocked ? 'opacity-40 grayscale' : 'cursor-pointer hover:scale-110'}`}
+                                style={{ top: zone.top, left: zone.left, transform: 'translate(-50%, -50%)' }}
+                                onClick={() => {
+                                    if (isUnlocked) onSelectLevel(zone.id);
+                                    else playSound('wrong');
+                                }}
+                            >
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-3xl shadow-lg border-4 ${isCompleted ? 'border-yellow-400 bg-emerald-400' : 'border-white'} ${zone.color} ${isUnlocked && !isCompleted ? 'node-active' : ''} z-10`}>
+                                    {zone.icon}
+                                </div>
+                                <div className="mt-1 bg-blue-950 border border-white text-white font-bold text-[10px] px-2 py-0.5 rounded-md whitespace-nowrap z-10 shadow-sm">
+                                    {zone.name}
+                                </div>
+                                {isCompleted && <div className="absolute -top-3 -right-3 text-lg z-20 animate-bounce">⭐</div>}
+                            </div>
+                        );
+                    })}
+
+                    {/* Boss Node */}
+                    <div 
+                        className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center transition-all ${saveFile.completedLevels.length >= 5 ? 'cursor-pointer hover:scale-110 node-active' : 'opacity-40 grayscale'}`}
+                        onClick={() => {
+                            if (saveFile.completedLevels.length >= 5) onSelectLevel('boss');
+                            else playSound('wrong');
+                        }}
+                    >
+                        <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl shadow-2xl border-4 border-red-500 bg-slate-900 z-10">
+                            👑
+                        </div>
+                        <div className="mt-1 bg-red-600 border border-white text-white font-bold text-xs px-3 py-1 rounded-full z-10 animate-pulse whitespace-nowrap">
+                            ด่านบอส: พิชิตราชาสับสน ⚔️
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. Mini Games
+        
+        // Game 1: Fish (Catch Food, Dodge Trash)
+        const GameFish = ({ onWin }) => {
+            const [score, setScore] = React.useState(0);
+            const [items, setItems] = React.useState([]);
+            const [gameActive, setGameActive] = React.useState(true);
+
+            React.useEffect(() => {
+                if (!gameActive) return;
+                const spawnRate = setInterval(() => {
+                    const isGood = Math.random() > 0.4;
+                    const id = Date.now() + Math.random();
+                    const left = Math.floor(Math.random() * 80) + 10;
+                    const duration = Math.random() * 1.5 + 2.5; // Faster for excitement!
+                    
+                    const newItem = { id, isGood, left, duration, emoji: isGood ? (Math.random() > 0.5 ? '🦐' : '🌱') : (Math.random() > 0.5 ? '🗑️' : '🛢️') };
+                    setItems(prev => [...prev, newItem]);
+
+                    setTimeout(() => {
+                        setItems(prev => prev.filter(i => i.id !== id));
+                    }, duration * 1000);
+
+                }, 900);
+                return () => clearInterval(spawnRate);
+            }, [gameActive]);
+
+            React.useEffect(() => {
+                if (score >= 10) {
+                    setGameActive(false);
+                    playSound('win');
+                    setTimeout(onWin, 2000);
+                }
+            }, [score]);
+
+            const handleClick = (item) => {
+                if (!gameActive) return;
+                if (item.isGood) {
+                    playSound('coin');
+                    setScore(s => s + 1);
+                } else {
+                    playSound('wrong');
+                    setScore(s => Math.max(0, s - 2));
+                }
+                setItems(prev => prev.filter(i => i.id !== item.id));
+            };
+
+            return (
+                <div className="h-full bg-blue-500 relative overflow-hidden flex flex-col bg-gradient-to-b from-sky-600 to-blue-900">
+                    <div className="p-4 bg-black/40 text-white flex justify-between items-center z-10 border-b-2 border-white/20 mt-12">
+                        <div className="font-bold text-lg">ด่านที่ 1: กลุ่มปลา 🐟</div>
+                        <div className="font-bold text-yellow-300 bg-blue-950 px-3 py-1 rounded-full border border-yellow-300">คะแนน: {score} / 10</div>
+                    </div>
+                    
+                    <div className="text-white text-center mt-3 z-10 bg-black/30 p-3 mx-4 rounded-xl border border-white/10 text-xs leading-relaxed">
+                        <strong className="text-yellow-200">เกร็ดความรู้:</strong> สัตว์น้ำ หายใจด้วยเหงือก ใช้ครีบว่ายน้ำนะจ๊ะ!<br/>
+                        <span className="text-emerald-300 font-bold">👉 แตะจับอาหารสัตว์น้ำ (🦐🌱) และหลีกเลี่ยงขยะมลพิษ!</span>
+                    </div>
+                    
+                    {items.map(item => (
+                        <div 
+                            key={item.id}
+                            className="falling-item text-5xl cursor-pointer select-none active:scale-125 transition-transform"
+                            style={{ 
+                                left: `${item.left}%`, 
+                                animationDuration: `${item.duration}s` 
+                            }}
+                            onMouseDown={() => handleClick(item)}
+                            onTouchStart={(e) => { e.preventDefault(); handleClick(item); }}
+                        >
+                            {item.emoji}
+                        </div>
+                    ))}
+                    
+                    {score >= 10 && (
+                        <div className="absolute inset-0 bg-blue-950/90 flex items-center justify-center flex-col z-20 animate-fade-in">
+                            <div className="text-7xl mb-4 animate-bounce">🏆</div>
+                            <h2 className="text-3xl text-yellow-300 font-bold">สุดยอดคุณหนู!</h2>
+                            <p className="text-white mt-2">ผ่านบททดสอบเมืองใต้ทะเลแล้ว</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Game 2: Frog (Jump & Trivia)
+        const GameFrog = ({ onWin }) => {
+            const [step, setStep] = React.useState(0);
+            const questions = [
+                { q: "สัตว์สะเทินน้ำสะเทินบก อาศัยอยู่อย่างไร?", a: "อยู่ได้ทั้งบนบกและในน้ำ 🐸", b: "อยู่ในน้ำลึกเท่านั้น 🐋", correct: "a" },
+                { q: "ผิวหนังของกบมีลักษณะเด่นอย่างไรบ้าง?", a: "แห้ง มีเกล็ดแข็ง 🦎", b: "ผิวเปียกชื้น ไม่มีขนหรือเกล็ด 🐸", correct: "b" },
+                { q: "ตอนเป็นลูกอ๊อด ตัวอ่อนหายใจด้วยอะไร?", a: "เหงือก 🐟", b: "ปอด 🐒", correct: "a" }
+            ];
+
+            const handleAnswer = (ans) => {
+                if (ans === questions[step].correct) {
+                    playSound('jump');
+                    if (step === questions.length - 1) {
+                        playSound('win');
+                        setTimeout(onWin, 1500);
+                    } else {
+                        setStep(s => s + 1);
+                    }
+                } else {
+                    playSound('wrong');
+                }
+            };
+
+            return (
+                <div className="h-full bg-emerald-800 relative overflow-hidden flex flex-col items-center bg-gradient-to-b from-green-600 to-emerald-950">
+                    <div className="w-full p-4 bg-black/40 text-white text-center font-bold text-lg z-10 border-b-2 border-white/20 mt-12">
+                        ด่านที่ 2: สัตว์สะเทินน้ำสะเทินบก 🐸
+                    </div>
+                    
+                    <div className="flex-1 w-full relative flex flex-col justify-end items-center pb-24">
+                        {/* Lilypads with frog visual progress */}
+                        {[0,1,2,3].map(i => (
+                            <div key={i} className={`w-36 h-12 bg-emerald-500 rounded-[50%] border-b-8 border-emerald-900 mb-6 flex items-center justify-center transition-all duration-500 ${step === i ? 'opacity-100 scale-110 shadow-[0_0_25px_rgba(253,224,71,0.8)]' : 'opacity-40'}`}>
+                                {step === i && <div className="text-5xl -mt-10 animate-bounce">🐸</div>}
+                            </div>
+                        ))}
+                    </div>
+
+                    {step < questions.length && (
+                        <div className="absolute bottom-6 left-4 right-4 glass-panel p-5 z-20 border-emerald-900">
+                            <div className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full inline-block font-bold mb-2">
+                                คำถามข้อที่ {step + 1}/{questions.length}
+                            </div>
+                            <p className="text-blue-950 font-bold mb-4 text-base">{questions[step].q}</p>
+                            <div className="flex flex-col gap-2.5">
+                                <Button onClick={() => handleAnswer('a')} className="w-full text-sm bg-blue-100 border-blue-300 text-blue-900 hover:bg-blue-200">{questions[step].a}</Button>
+                                <Button onClick={() => handleAnswer('b')} className="w-full text-sm bg-blue-100 border-blue-300 text-blue-900 hover:bg-blue-200">{questions[step].b}</Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {step >= questions.length && (
+                        <div className="absolute inset-0 bg-emerald-950/90 flex items-center justify-center flex-col z-30">
+                            <div className="text-7xl mb-4 animate-bounce">🏆</div>
+                            <h2 className="text-3xl text-yellow-300 font-bold">ยินดีด้วยเก่งมาก!</h2>
+                            <p className="text-white mt-1">ช่วยเจ้ากบน้อยกระโดดข้ามบึงสำเร็จ!</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Game 3: Reptile (Memory Match) -- COMPLETE UI/UX REWRITE FOR ACCESSIBILITY AND PERFECT 3D TRANSFORMS
+        const GameReptile = ({ onWin }) => {
+            const emojis = ['🦎', '🐍', '🐢', '🐊'];
+            const [cards, setCards] = React.useState([]);
+            const [flipped, setFlipped] = React.useState([]);
+            const [matched, setMatched] = React.useState([]);
+            const [isBusy, setIsBusy] = React.useState(false);
+
+            React.useEffect(() => {
+                const shuffled = [...emojis, ...emojis]
+                    .sort(() => Math.random() - 0.5)
+                    .map((emoji, idx) => ({ id: idx, emoji }));
+                setCards(shuffled);
+            }, []);
+
+            React.useEffect(() => {
+                if (matched.length === emojis.length) {
+                    playSound('win');
+                    setTimeout(onWin, 2000);
+                }
+            }, [matched]);
+
+            const handleFlip = (idx) => {
+                // Ignore if currently locked, already flipped, or matched
+                if (isBusy || flipped.length >= 2 || flipped.includes(idx) || matched.includes(cards[idx].emoji)) {
+                    return;
+                }
+
+                playSound('jump');
+                const newFlipped = [...flipped, idx];
+                setFlipped(newFlipped);
+
+                if (newFlipped.length === 2) {
+                    setIsBusy(true); // Lock clicking to prevent state corruption
+                    const firstCard = cards[newFlipped[0]];
+                    const secondCard = cards[newFlipped[1]];
+
+                    if (firstCard.emoji === secondCard.emoji) {
+                        // MATCH
+                        setTimeout(() => {
+                            playSound('coin');
+                            setMatched(prev => [...prev, firstCard.emoji]);
+                            setFlipped([]);
+                            setIsBusy(false);
+                        }, 500);
+                    } else {
+                        // MISMATCH - Flip back after delay
+                        setTimeout(() => {
+                            playSound('wrong');
+                            setFlipped([]);
+                            setIsBusy(false);
+                        }, 1000);
+                    }
+                }
+            };
+
+            return (
+                <div className="h-full bg-amber-700 relative overflow-hidden flex flex-col items-center bg-gradient-to-b from-amber-600 to-amber-950">
+                    <div className="w-full p-4 bg-black/40 text-white text-center font-bold text-lg z-10 mt-12">
+                        ด่านที่ 3: สัตว์เลื้อยคลาน 🦎
+                    </div>
+                    
+                    <div className="text-white text-center mt-3 z-10 bg-black/30 p-2.5 mx-4 rounded-xl text-xs">
+                        <strong className="text-yellow-200">เกร็ดความรู้:</strong> สัตว์เลือดเย็น ผิวหนังแห้ง มีเกล็ดหนา และวางไข่บนบก!<br/>
+                        <span className="text-emerald-300 font-bold">🧩 แตะการ์ดด้านล่างเพื่อจับคู่พวกเราให้ครบทีม!</span>
+                    </div>
+
+                    <div className="flex-1 flex items-center justify-center p-4 w-full">
+                        <div className="grid grid-cols-4 gap-3 w-full max-w-sm px-2 perspective-container">
+                            {cards.map((card, idx) => {
+                                const isCardFlipped = flipped.includes(idx) || matched.includes(card.emoji);
+                                const isMatched = matched.includes(card.emoji);
+                                
+                                return (
+                                    <div 
+                                        key={card.id} 
+                                        className="w-full aspect-square cursor-pointer relative"
+                                        onClick={() => handleFlip(idx)}
+                                    >
+                                        <div className={`card-inner ${isCardFlipped ? 'flipped' : ''}`}>
+                                            {/* FRONT (Hidden side / Question Mark) */}
+                                            <div className="card-front border-amber-950 bg-amber-400 text-amber-950 flex flex-col items-center justify-center shadow-md">
+                                                <span className="text-3xl font-black">❓</span>
+                                            </div>
+                                            
+                                            {/* BACK (Revealed side / Animal) */}
+                                            <div className={`card-back border-amber-950 flex items-center justify-center text-4xl shadow-md transition-colors duration-300 ${isMatched ? 'bg-green-100 border-green-600' : 'bg-white'}`}>
+                                                {card.emoji}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {matched.length === emojis.length && (
+                        <div className="absolute inset-0 bg-amber-950/95 flex items-center justify-center flex-col z-30 animate-fade-in">
+                            <div className="text-7xl mb-4 animate-bounce">🏆</div>
+                            <h2 className="text-3xl text-yellow-300 font-bold">เก่งมากนักสำรวจ!</h2>
+                            <p className="text-white mt-1">จับคู่และเรียนรู้ลักษณะของสัตว์เลื้อยคลานครบถ้วน!</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Game 4: Bird (Catch Stars in Sky)
+        const GameBird = ({ onWin }) => {
+            const [stars, setStars] = React.useState(0);
+            const [starPos, setStarPos] = React.useState({ top: 50, left: 50 });
+            
+            const moveStar = () => {
+                setStarPos({
+                    top: Math.random() * 50 + 25,
+                    left: Math.random() * 80 + 10
+                });
+            };
+
+            React.useEffect(() => {
+                moveStar();
+                const interval = setInterval(moveStar, 1400);
+                return () => clearInterval(interval);
+            }, []);
+
+            const catchStar = () => {
+                playSound('coin');
+                setStars(s => {
+                    const next = s + 1;
+                    if (next >= 5) {
+                        playSound('win');
+                        setTimeout(onWin, 1500);
+                    }
+                    return next;
+                });
+                moveStar();
+            };
+
+            return (
+                <div className="h-full bg-sky-400 relative overflow-hidden flex flex-col star-bg">
+                    <div className="w-full p-4 bg-black/40 text-white text-center font-bold text-lg z-10 mt-12">
+                        ด่านที่ 4: กลุ่มนก 🐦
+                    </div>
+                    
+                    <div className="text-white text-center mt-3 z-10 bg-black/30 p-2.5 mx-4 rounded-xl text-xs leading-normal">
+                        <strong className="text-yellow-200">เกร็ดความรู้:</strong> มีขนเป็นแผง มีปีกบินได้ ออกลูกเป็นไข่!<br/>
+                        <span className="text-emerald-300 font-bold">✨ แตะเก็บดวงดาวระยิบระยับกลางอากาศให้ครบ 5 ดวง!</span>
+                    </div>
+
+                    <div className="text-yellow-300 text-center mt-4 text-2xl font-bold">
+                        🌟 ดวงดาวที่สะสม: {stars} / 5
+                    </div>
+
+                    {stars < 5 && (
+                        <div 
+                            className="absolute text-6xl transition-all duration-700 ease-out cursor-pointer hover:scale-125"
+                            style={{ top: `${starPos.top}%`, left: `${starPos.left}%`, transform: 'translate(-50%, -50%)' }}
+                            onMouseDown={catchStar}
+                            onTouchStart={(e) => { e.preventDefault(); catchStar(); }}
+                        >
+                            <span className="absolute animate-ping">🌟</span>
+                            <span className="relative">⭐</span>
+                        </div>
+                    )}
+                    
+                    {/* Decorative birds flying background */}
+                    <div className="absolute top-1/3 left-10 text-4xl opacity-40 animate-float">🕊️</div>
+                    <div className="absolute top-2/3 right-16 text-4xl opacity-30 animate-float" style={{ animationDelay: '1.5s' }}>🦅</div>
+                </div>
+            );
+        };
+
+        // Game 5: Mammal (Find Hidden Mom)
+        const GameMammal = ({ onWin }) => {
+            const [found, setFound] = React.useState(false);
+            
+            const handleFind = () => {
+                playSound('coin');
+                setFound(true);
+                playSound('win');
+                setTimeout(onWin, 2000);
+            };
+
+            return (
+                <div className="h-full bg-pink-800 relative overflow-hidden flex flex-col bg-gradient-to-b from-pink-600 to-pink-950">
+                    <div className="w-full p-4 bg-black/40 text-white text-center font-bold text-lg z-20 mt-12">
+                        ด่านที่ 5: สัตว์เลี้ยงลูกด้วยนม 🐘
+                    </div>
+                    
+                    <div className="text-white text-center mt-3 z-20 bg-black/30 p-2.5 mx-4 rounded-xl text-xs leading-normal">
+                        <strong className="text-yellow-200">เกร็ดความรู้:</strong> มีขนเป็นเส้น ตัวเมียเลี้ยงลูกด้วยน้ำนม!<br/>
+                        <span className="text-yellow-300 font-bold">👉 ค้นหาแม่ช้าง 🐘 ที่ซ่อนอยู่ในป่า เพื่อช่วยลูกช้างน้อย!</span>
+                    </div>
+
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+
+                    {/* Various Animals as decoys */}
+                    <div className="absolute top-[32%] left-[15%] text-5xl">🦓</div>
+                    <div className="absolute top-[62%] left-[75%] text-5xl">🦒</div>
+                    <div className="absolute top-[42%] left-[62%] text-5xl">🐅</div>
+                    <div className="absolute top-[75%] left-[20%] text-5xl">🦍</div>
+
+                    {/* Target Mom Elephant */}
+                    <div 
+                        className={`absolute text-7xl cursor-pointer transition-all duration-1000 ${found ? 'top-[45%] left-[35%] scale-150 z-30' : 'top-[80%] left-[80%] hover:scale-110'}`}
+                        onClick={handleFind}
+                    >
+                        🐘
+                        {!found && <div className="text-[10px] bg-red-500 text-white p-1 rounded-xl absolute -top-10 -left-6 whitespace-nowrap animate-bounce font-bold border-2 border-white">หาแม่ไม่เจอแงๆ 🥺</div>}
+                    </div>
+
+                    {found && (
+                        <div className="absolute inset-0 bg-pink-900/90 flex items-center justify-center z-20 animate-fade-in">
+                            <div className="flex gap-4 text-7xl mb-4 animate-bounce">
+                                🐘 ❤️ 🐘
+                            </div>
+                            <h2 className="text-3xl text-yellow-300 font-bold">อบอุ่นที่สุด!</h2>
+                            <p className="text-white mt-1">แม่ช้างให้นมลูกช้างและพากลับฝูงเรียบร้อย!</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // Boss Battle: Sorting Game
+        const BossBattle = ({ onWin }) => {
+            const [currentAnimal, setCurrentAnimal] = React.useState(0);
+            const [score, setScore] = React.useState(0);
+            const [gameEnd, setGameEnd] = React.useState(false);
+
+            const testAnimals = [
+                { emoji: '🦈', correctId: 1, name: 'ฉลาม (ปลากระดูกอ่อน)' },
+                { emoji: '🦅', correctId: 4, name: 'เหยี่ยว' },
+                { emoji: '🐋', correctId: 5, name: 'วาฬ (เลี้ยงลูกด้วยนมนะจ๊ะ!)' },
+                { emoji: '🐊', correctId: 3, name: 'จระเข้' },
+                { emoji: '🐸', correctId: 2, name: 'กบมหัศจรรย์' },
+            ];
+
+            const handleSort = (zoneId) => {
+                if (gameEnd) return;
+                
+                if (testAnimals[currentAnimal].correctId === zoneId) {
+                    playSound('coin');
+                    setScore(s => s + 1);
+                } else {
+                    playSound('wrong');
+                }
+
+                if (currentAnimal < testAnimals.length - 1) {
+                    setCurrentAnimal(curr => curr + 1);
+                } else {
+                    setGameEnd(true);
+                    if (score + (testAnimals[currentAnimal].correctId === zoneId ? 1 : 0) >= 4) {
+                        playSound('win');
+                        setTimeout(onWin, 3000);
+                    } else {
+                        // Fail, try again
+                        setTimeout(() => {
+                            setCurrentAnimal(0);
+                            setScore(0);
+                            setGameEnd(false);
+                        }, 2000);
+                    }
+                }
+            };
+
+            return (
+                <div className="h-full bg-red-950 relative flex flex-col p-4 text-white bg-gradient-to-b from-red-900 to-black">
+                    <div className="text-center mb-4 mt-12">
+                        <h2 className="text-2xl font-bold text-yellow-400">บอส: ราชาแห่งความสับสน 👑</h2>
+                        <p className="text-xs text-gray-300">บอสจับสัตว์ผสมปนเปกันหมดแล้ว! แยกกลุ่มให้ที (ต้องถูก 4/5)</p>
+                        <div className="text-lg mt-2 bg-red-900/60 inline-block px-4 py-1 rounded-full border border-red-500">
+                            คะแนนสะสม: {score} / 5
+                        </div>
+                    </div>
+
+                    {!gameEnd ? (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                            <div className="text-8xl animate-bounce mb-3 bg-white/10 p-6 rounded-full shadow-[0_0_30px_rgba(253,224,71,0.4)] border-2 border-red-500">
+                                {testAnimals[currentAnimal].emoji}
+                            </div>
+                            <div className="text-lg mb-6 font-bold text-yellow-300 bg-black/40 px-3 py-1 rounded-md">{testAnimals[currentAnimal].name}</div>
+                            
+                            <div className="grid grid-cols-2 gap-3.5 w-full max-w-xs">
+                                {ZONES.map(zone => (
+                                    <button 
+                                        key={zone.id}
+                                        onClick={() => handleSort(zone.id)}
+                                        className={`${zone.color} p-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 active:scale-95 text-white border-b-4 border-black/40`}
+                                    >
+                                        <span className="text-xl">{zone.icon}</span> {zone.type}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                            <div className="text-7xl mb-4">{score >= 4 ? '🎉' : '💀'}</div>
+                            <h2 className="text-3xl font-bold mb-4">{score >= 4 ? 'คุณสยบบอสสำเร็จ!' : 'ยังไม่ผ่านนะจ๊ะ!'}</h2>
+                            {score >= 4 ? (
+                                <p className="text-center text-green-300 animate-pulse font-bold">เก่งมาก! มารับเกียรติบัตรนักสำรวจกันเถอะ</p>
+                            ) : (
+                                <p className="text-center text-red-300">ระบบกำลังรีเซ็ตคำถามเพื่อให้คุณครูทบทวนอีกรอบ...</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 6. Scene: Certificate & Success Screen
+        const Certificate = ({ studentInfo, saveFile, onRestart }) => {
+            return (
+                <div className="h-full bg-slate-900 overflow-y-auto p-4 flex flex-col items-center justify-center">
+                    {/* Certificate Card Design */}
+                    <div className="w-full max-w-sm bg-amber-50 border-8 border-yellow-500 rounded-3xl p-6 shadow-2xl relative text-center text-gray-800 border-double">
+                        {/* Decorative seals */}
+                        <div className="absolute top-2 left-2 text-xl">🌟</div>
+                        <div className="absolute top-2 right-2 text-xl">🌟</div>
+                        
+                        <h2 className="text-xl font-black text-amber-800 tracking-wider">เกียรติบัตรนักสำรวจยอดเยี่ยม</h2>
+                        <h3 className="text-xs font-bold text-gray-500 mb-6 uppercase tracking-widest">Vertebrates Explorer Club</h3>
+                        
+                        <p className="text-sm text-gray-600 mb-2">เกียรติบัตรฉบับนี้ให้ไว้เพื่อแสดงว่า</p>
+                        
+                        <p className="text-xl font-bold text-blue-900 border-b-2 border-dashed border-blue-400 pb-1 mb-2 inline-block px-4">
+                            {studentInfo.name}
+                        </p>
+                        
+                        <p className="text-xs text-gray-600 font-semibold mb-4">
+                            ระดับชั้น <span className="text-blue-800 font-bold">{studentInfo.class}</span> &nbsp;&nbsp; เลขที่ <span className="text-blue-800 font-bold">{studentInfo.no}</span>
+                        </p>
+                        
+                        <p className="text-xs text-gray-600 px-4 leading-relaxed mb-6">
+                            ได้เรียนรู้ ฝึกฝน และสอบผ่านภารกิจจำแนกสัตว์มีกระดูกสันหลังทั้ง 5 กลุ่ม ได้แก่ กลุ่มปลา, สัตว์สะเทินน้ำสะเทินบก, สัตว์เลื้อยคลาน, สัตว์ปีก และสัตว์เลี้ยงลูกด้วยนม ได้รับคะแนนเต็มภาคภูมิ!
+                        </p>
+
+                        <div className="flex justify-around items-center bg-yellow-100 border-2 border-yellow-300 rounded-2xl p-3 mb-6">
+                            <div>
+                                <span className="block text-[10px] text-gray-500 font-bold">ดาวที่ได้รับ</span>
+                                <span className="text-xl font-bold text-yellow-600">⭐ {saveFile.stars} / 15</span>
+                            </div>
+                            <div className="w-[1px] h-8 bg-yellow-300"></div>
+                            <div>
+                                <span className="block text-[10px] text-gray-500 font-bold">สถานะ</span>
+                                <span className="text-xs font-bold text-emerald-600">ผ่านเกณฑ์ยอดเยี่ยม! ✅</span>
+                            </div>
+                        </div>
+
+                        {/* Signature of turtle */}
+                        <div className="flex justify-between items-end mt-4">
+                            <div className="text-[10px] text-gray-400 text-left">
+                                วันที่อนุมัติ: {new Date().toLocaleDateString('th-TH')}
+                            </div>
+                            <div className="text-center">
+                                <span className="text-xl block">🐢</span>
+                                <span className="text-[9px] block text-amber-900 font-bold border-t border-amber-300 pt-0.5">ศ. ดร. เต่าน้อย (ผู้ประเมิน)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 text-center text-white text-xs max-w-sm px-4">
+                        <p className="mb-4 text-yellow-300 font-bold">📸 แนะนำให้เด็กๆ แคปหน้าจอหน้านี้ ส่งครูเพื่อรับคะแนนได้เลยจ้า!</p>
+                        <Button onClick={onRestart} className="w-full bg-blue-500 hover:bg-blue-400 text-white border-blue-700">
+                            <i className="fa-solid fa-rotate-left mr-1"></i> เริ่มเล่นใหม่อีกครั้ง
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        // Encyclopedia / Collection Book
+        const Encyclopedia = ({ saveFile, onClose }) => {
+            return (
+                <div className="h-full bg-[linear-gradient(to_bottom,rgba(120,53,4,0.4),rgba(120,53,4,0.9)),url('https://www.transparenttextures.com/patterns/wood-pattern.png')] p-4 flex flex-col mt-12">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-white drop-shadow-md">📖 สมุดสะสมสัตว์</h2>
+                        <button onClick={onClose} className="bg-red-500 text-white w-10 h-10 rounded-full font-bold shadow-md hover:bg-red-600 flex items-center justify-center border-2 border-white">
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto grid grid-cols-1 gap-4 pb-12">
+                        {ZONES.map(zone => {
+                            const isUnlocked = saveFile.completedLevels.includes(zone.id);
+                            return (
+                                <div key={zone.id} className={`glass-panel p-4 flex items-center gap-4 ${isUnlocked ? 'bg-white/95 text-gray-800' : 'bg-black/50 text-gray-400 grayscale'}`}>
+                                    <div className={`w-14 h-14 flex-shrink-0 rounded-full flex items-center justify-center text-3xl shadow-inner ${isUnlocked ? zone.color : 'bg-gray-700'}`}>
+                                        {isUnlocked ? zone.icon : '❓'}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="font-bold text-base text-blue-950">{isUnlocked ? zone.type : 'ยังไม่ปลดล็อก'}</h3>
+                                        <p className="text-[10px] mt-1 leading-relaxed text-gray-600">{isUnlocked ? zone.info : 'เอาชนะด่านนี้เพื่อศึกษารายละเอียดของสัตว์กลุ่มนี้'}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [scene, setScene] = React.useState('menu'); // menu, register, intro, map, level1-5, boss, certificate, book
+            const [isMutedState, setIsMutedState] = React.useState(false);
+            const [studentInfo, setStudentInfo] = React.useState({
+                name: '',
+                class: '',
+                no: ''
+            });
+            const [saveFile, setSaveFile] = React.useState({
+                unlockedLevels: 1,
+                completedLevels: [],
+                stars: 0,
+                hasBeatenBoss: false
+            });
+
+            // Load Saved Progress and Student info
+            React.useEffect(() => {
+                const saved = localStorage.getItem('vertebrates_save_v2');
+                const savedInfo = localStorage.getItem('vertebrates_student_info');
+                if (saved) {
+                    setSaveFile(JSON.parse(saved));
+                }
+                if (savedInfo) {
+                    setStudentInfo(JSON.parse(savedInfo));
+                }
+            }, []);
+
+            const saveProgress = (newSave) => {
+                setSaveFile(newSave);
+                localStorage.setItem('vertebrates_save_v2', JSON.stringify(newSave));
+            };
+
+            const handleRegister = (info) => {
+                setStudentInfo(info);
+                localStorage.setItem('vertebrates_student_info', JSON.stringify(info));
+                setScene('intro');
+            };
+
+            const handleWinLevel = (levelId) => {
+                const newSave = { ...saveFile };
+                if (!newSave.completedLevels.includes(levelId)) {
+                    newSave.completedLevels.push(levelId);
+                    newSave.stars += 3;
+                    if (levelId === newSave.unlockedLevels && newSave.unlockedLevels < 5) {
+                        newSave.unlockedLevels += 1;
+                    }
+                }
+                saveProgress(newSave);
+                setScene('map');
+            };
+
+            const handleWinBoss = () => {
+                const newSave = { ...saveFile, hasBeatenBoss: true };
+                saveProgress(newSave);
+                setScene('certificate');
+            };
+
+            const handleRestart = () => {
+                const newSave = {
+                    unlockedLevels: 1,
+                    completedLevels: [],
+                    stars: 0,
+                    hasBeatenBoss: false
+                };
+                saveProgress(newSave);
+                setScene('register');
+            };
+
+            const renderScene = () => {
+                switch(scene) {
+                    case 'menu': return <MainMenu onStart={() => setScene(studentInfo.name ? 'map' : 'register')} />;
+                    case 'register': return <RegisterScreen onRegister={handleRegister} />;
+                    case 'intro': return <IntroStory onNext={() => setScene('map')} studentInfo={studentInfo} />;
+                    case 'map': return <WorldMap saveFile={saveFile} onSelectLevel={(id) => setScene(id === 'boss' ? 'levelboss' : `level${id}`)} onOpenBook={() => setScene('book')} studentInfo={studentInfo} />;
+                    case 'level1': return <GameFish onWin={() => handleWinLevel(1)} />;
+                    case 'level2': return <GameFrog onWin={() => handleWinLevel(2)} />;
+                    case 'level3': return <GameReptile onWin={() => handleWinLevel(3)} />;
+                    case 'level4': return <GameBird onWin={() => handleWinLevel(4)} />;
+                    case 'level5': return <GameMammal onWin={() => handleWinLevel(5)} />;
+                    case 'levelboss': return <BossBattle onWin={handleWinBoss} />;
+                    case 'book': return <Encyclopedia saveFile={saveFile} onClose={() => setScene('map')} />;
+                    case 'certificate': return <Certificate studentInfo={studentInfo} saveFile={saveFile} onRestart={handleRestart} />;
+                    default: return <MainMenu onStart={() => setScene('register')} />;
+                }
+            };
+
+            return (
+                <div className="game-container">
+                    <GameHeader 
+                        isMutedState={isMutedState} 
+                        onMuteToggle={(m) => setIsMutedState(m)} 
+                        onBackMenu={scene !== 'menu' && scene !== 'register' && scene !== 'intro' && scene !== 'certificate' ? () => setScene('map') : null}
+                    />
+                    {renderScene()}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
